@@ -36,6 +36,7 @@ function MapsContent() {
   const { position, livePosition, accuracy, error, isDemoMode, toggleDemoMode } = useGeolocation();
   const searchParams = useSearchParams();
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+  const [cameraActive, setCameraActive] = useState(true);
 
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -235,6 +236,9 @@ function MapsContent() {
   const handleStartAr = async () => {
     await requestPermission();
     setArActive(true);
+    if (!cameraActive) {
+      setCameraActive(true);
+    }
     if (cameraRatio < 0.60) {
       setCameraRatio(0.65);
     }
@@ -280,10 +284,14 @@ function MapsContent() {
       <div ref={splitContainerRef} className="flex-1 w-full flex flex-col min-h-0 relative">
         {/* TOP: CAMERA */}
         <div className="w-full relative min-h-0 overflow-hidden" style={{ flexBasis: `${cameraRatio * 100}%` }}>
-          <CameraView onVideoReady={setVideoEl} />
-          {arActive && (
+          <CameraView 
+            onVideoReady={setVideoEl} 
+            isActive={cameraActive}
+            onToggleActive={() => setCameraActive(prev => !prev)}
+          />
+          {arActive && cameraActive && (
             <ArOverlay 
-              active={arActive}
+              active={arActive && cameraActive}
               accuracy={simulatedWalk ? 5 : accuracy}
               destination={destination}
               heading={heading}
@@ -293,7 +301,12 @@ function MapsContent() {
               realign={realign}
             />
           )}
-          <LandmarkScanner video={videoEl} arActive={arActive} />
+          <LandmarkScanner 
+            video={videoEl} 
+            arActive={arActive} 
+            cameraActive={cameraActive}
+            onToggleCamera={() => setCameraActive(prev => !prev)}
+          />
         </div>
 
         {/* DRAGGABLE DIVIDER */}

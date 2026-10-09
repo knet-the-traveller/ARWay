@@ -198,11 +198,6 @@ export default function PlaceSearch({
     onSelect?.(payload);
   };
 
-  const handleQuickPreset = (preset: string) => {
-    setQuery(preset);
-    searchPlaces(preset);
-  };
-
   const formatDistance = (m?: number) => {
     if (m === undefined) return "";
     if (m < 1000) return `${Math.round(m)}m`;
@@ -244,21 +239,6 @@ export default function PlaceSearch({
           </button>
         )}
       </div>
-
-      {/* QUICK PRESET CHIPS */}
-      {!query && (
-        <div className="flex gap-1.5 mt-1.5 px-0.5 overflow-x-auto scrollbar-none">
-          {["McDonald's", "Jollibee", "Coffee", "7-Eleven"].map((chip) => (
-            <button
-              key={chip}
-              onClick={() => handleQuickPreset(chip)}
-              className="text-[10px] px-2.5 py-1 rounded-full bg-neutral-900/80 hover:bg-neutral-800 border border-white/10 text-neutral-300 whitespace-nowrap active:scale-95 transition-all shadow-sm"
-            >
-              {chip}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* AUTOCOMPLETE RESULTS DROPDOWN */}
       {isOpen && results.length > 0 && (
