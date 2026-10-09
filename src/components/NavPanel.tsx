@@ -1,4 +1,5 @@
 import { RouteData } from "@/lib/route";
+import { useEffect, useState } from "react";
 
 interface NavPanelProps {
   destination: { lat: number, lng: number, name: string } | null;
@@ -13,18 +14,46 @@ interface NavPanelProps {
   remainingDistanceM: number;
   realign: boolean;
   onToggleRealign: () => void;
+  compact?: boolean;
 }
 
 export default function NavPanel({ 
   destination, routeData, routeLoading, routeError, 
   arActive, onStartAr, onStopAr, onRecenter, onClear, 
-  remainingDistanceM, realign, onToggleRealign 
+  remainingDistanceM, realign, onToggleRealign, compact = false
 }: NavPanelProps) {
 
+  const [showHint, setShowHint] = useState(true);
+  const [hintOpacity, setHintOpacity] = useState(1);
+
+  useEffect(() => {
+    if (!destination) {
+      setShowHint(true);
+      setHintOpacity(1);
+      
+      const fadeTimer = setTimeout(() => {
+        setHintOpacity(0);
+      }, 3000);
+      
+      const hideTimer = setTimeout(() => {
+        setShowHint(false);
+      }, 3300);
+      
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(hideTimer);
+      };
+    }
+  }, [destination]);
+
   if (!destination) {
+    if (!showHint) return null;
     return (
-      <div className="absolute bottom-16 left-4 right-4 bg-[#1c1c1e] text-white p-4 rounded-2xl shadow-xl z-20 pointer-events-auto">
-        <p className="text-[14px] text-gray-300 text-center">Pick a place from Sceneries, Shop, or Home, or tap the map</p>
+      <div 
+        className="absolute bottom-16 left-4 right-4 bg-[#1c1c1e] text-white p-4 rounded-2xl shadow-xl z-20 pointer-events-none transition-opacity duration-300"
+        style={{ opacity: hintOpacity }}
+      >
+        <p className="text-[14px] text-gray-300 text-center">Search above, pick a place from Sceneries, Shop, or Home, or tap the map.</p>
       </div>
     );
   }
@@ -79,6 +108,37 @@ export default function NavPanel({
                       : routeData.source === "cache" ? "Saved route (offline)" 
                       : "Direct line only";
     const sourceColor = routeData.source === "straight" ? "bg-red-500/20 text-red-400" : "bg-gray-800 text-gray-300";
+
+    if (compact) {
+      return (
+        <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-2 max-h-[84px]">
+          <div className="flex justify-between items-center">
+            <h3 className="text-[15px] font-semibold truncate flex-1 min-w-0 pr-2">{destination.name}</h3>
+            <div className="flex items-center text-[12px] text-gray-300 flex-shrink-0 gap-1.5">
+              <span className="font-medium text-white">{distText}</span>
+              <span>&middot;</span>
+              <span>{etaMins} min</span>
+            </div>
+          </div>
+  
+          <div className="flex gap-2 h-[44px]">
+            {arActive ? (
+              <button onClick={onStopAr} className="flex-1 bg-red-500 text-white font-semibold rounded-xl active:bg-red-600 transition-colors text-sm">Stop</button>
+            ) : (
+              <button onClick={onStartAr} className="flex-1 bg-blue-500 text-white font-semibold rounded-xl active:bg-blue-600 transition-colors text-sm">Start AR</button>
+            )}
+            {arActive && (
+              <button onClick={onRecenter} className="px-3 bg-gray-700 text-white font-semibold rounded-xl active:bg-gray-600 transition-colors text-xs">Recenter</button>
+            )}
+            <button onClick={onClear} className="px-3 bg-gray-800 text-gray-300 font-semibold rounded-xl active:bg-gray-700 transition-colors text-xs">Clear</button>
+            <label className="flex items-center justify-center gap-1.5 text-[10px] text-gray-500 bg-black/40 px-2 rounded-xl h-[44px] cursor-pointer active:bg-black/60 flex-shrink-0">
+              <input type="checkbox" checked={realign} onChange={onToggleRealign} className="w-3 h-3 accent-blue-500" />
+              Realign
+            </label>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-3 max-h-[130px]">

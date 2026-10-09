@@ -1,14 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { DM_Serif_Display, DM_Sans } from "next/font/google";
 import "./globals.css";
+import PhoneFrame from "@/components/PhoneFrame";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const dmSerif = DM_Serif_Display({
+  weight: "400",
+  variable: "--font-display",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const dmSans = DM_Sans({
+  variable: "--font-body",
   subsets: ["latin"],
 });
 
@@ -24,15 +26,13 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-import PhoneFrame from "@/components/PhoneFrame";
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      className={`${dmSerif.variable} ${dmSans.variable} antialiased`}
     >
-      <body className="m-0 p-0 bg-neutral-950">
+      <body className="m-0 p-0">
         <PhoneFrame>
           {children}
         </PhoneFrame>
@@ -40,3 +40,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
+

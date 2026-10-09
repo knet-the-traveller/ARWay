@@ -16,6 +16,12 @@ const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
 });
 
+import PlaceSearch from "@/components/PlaceSearch";
+import SplitHandle from "@/components/SplitHandle";
+
+const MIN_RATIO = 0.30;
+const MAX_RATIO = 0.70;
+
 function MapsContent() {
   const router = useRouter();
   const { position, accuracy, error } = useGeolocation();
@@ -31,16 +37,75 @@ function MapsContent() {
   
   const [realign, setRealign] = useState(true);
 
+  // Split layout state
+  const [cameraRatio, setCameraRatio] = useState(0.55);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [compactNav, setCompactNav] = useState(false);
+  const lastResizeEventTimeRef = useRef<number>(0);
+
   useEffect(() => {
     try {
       if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("arway_realign");
-        if (stored !== null) {
-          setRealign(stored === "1");
+        const storedRealign = localStorage.getItem("arway_realign");
+        if (storedRealign !== null) {
+          setRealign(storedRealign === "1");
+        }
+        
+        const storedRatio = localStorage.getItem("arway_split_ratio");
+        if (storedRatio !== null) {
+          let r = parseFloat(storedRatio);
+          if (r >= MIN_RATIO && r <= MAX_RATIO) {
+            setCameraRatio(r);
+          }
         }
       }
     } catch (e) {}
   }, []);
+
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setCompactNav(entry.contentRect.height < 300);
+      }
+    });
+    ro.observe(mapContainerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const triggerMapResize = (throttle: boolean) => {
+    const now = Date.now();
+    if (!throttle || now - lastResizeEventTimeRef.current > 100) {
+      window.dispatchEvent(new Event("resize"));
+      lastResizeEventTimeRef.current = now;
+    }
+  };
+
+  const handleRatioChange = (r: number) => {
+    setCameraRatio(r);
+    triggerMapResize(true);
+  };
+
+  const handleRatioCommit = (r: number) => {
+    setCameraRatio(r);
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("arway_split_ratio", r.toString());
+      }
+    } catch (e) {}
+    triggerMapResize(false);
+  };
+
+  const handleRatioReset = () => {
+    setCameraRatio(0.55);
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("arway_split_ratio", "0.55");
+      }
+    } catch (e) {}
+    triggerMapResize(false);
+  };
 
   const handleToggleRealign = () => {
     const next = !realign;
@@ -153,6 +218,10 @@ function MapsContent() {
     setCustomDestination({ lat, lng, name: "Dropped pin" });
   };
 
+  const handlePlaceSelect = (place: { name: string, lat: number, lng: number }) => {
+    setCustomDestination(place);
+  };
+
   return (
     <main className="flex flex-col w-full flex-1 min-h-0 bg-black text-white overflow-hidden relative">
       {/* STATUS BAR */}
@@ -168,50 +237,66 @@ function MapsContent() {
         </div>
       </div>
       
-      {/* TOP: CAMERA */}
-      <div className="w-full h-[55%] relative">
-        <CameraView onVideoReady={setVideoEl} />
-        {arActive && (
-          <ArOverlay 
-            active={arActive}
-            accuracy={accuracy}
-            destination={destination}
-            heading={heading}
-            pitch={pitch}
-            position={effectivePosition}
-            route={routeData?.coords || null}
-            realign={realign}
+      <div ref={splitContainerRef} className="flex-1 w-full flex flex-col min-h-0 relative">
+        {/* TOP: CAMERA */}
+        <div className="w-full relative min-h-0 overflow-hidden" style={{ flexBasis: `${cameraRatio * 100}%` }}>
+          <CameraView onVideoReady={setVideoEl} />
+          {arActive && (
+            <ArOverlay 
+              active={arActive}
+              accuracy={accuracy}
+              destination={destination}
+              heading={heading}
+              pitch={pitch}
+              position={effectivePosition}
+              route={routeData?.coords || null}
+              realign={realign}
+            />
+          )}
+          <LandmarkScanner video={videoEl} arActive={arActive} />
+        </div>
+
+        {/* DIVIDER */}
+        <SplitHandle 
+          ratio={cameraRatio} 
+          min={MIN_RATIO} 
+          max={MAX_RATIO} 
+          onChange={handleRatioChange}
+          onCommit={handleRatioCommit}
+          onReset={handleRatioReset}
+          containerRef={splitContainerRef}
+        />
+
+        {/* BOTTOM: MAP */}
+        <div ref={mapContainerRef} className="w-full relative min-h-0 overflow-hidden" style={{ flexGrow: 1 }}>
+          <PlaceSearch 
+            userPosition={effectivePosition} 
+            destinationName={destination?.name || null} 
+            onSelect={handlePlaceSelect} 
           />
-        )}
-        <LandmarkScanner video={videoEl} arActive={arActive} />
-      </div>
-
-      {/* DIVIDER */}
-      <div className="w-full h-[1px] bg-gray-800 z-10" />
-
-      {/* BOTTOM: MAP */}
-      <div className="w-full h-[45%] relative">
-        <MapView 
-          position={effectivePosition} 
-          destination={destination} 
-          route={routeData?.coords.map(c => [c.lat, c.lng])} 
-          onMapClick={handleMapClick}
-          heading={heading}
-        />
-        <NavPanel 
-          destination={destination}
-          routeData={routeData}
-          routeLoading={routeLoading}
-          routeError={routeError}
-          arActive={arActive}
-          onStartAr={handleStartAr}
-          onStopAr={() => setArActive(false)}
-          onRecenter={handleRecenter}
-          onClear={handleClear}
-          remainingDistanceM={remainingDist}
-          realign={realign}
-          onToggleRealign={handleToggleRealign}
-        />
+          <MapView 
+            position={effectivePosition} 
+            destination={destination} 
+            route={routeData?.coords.map(c => [c.lat, c.lng])} 
+            onMapClick={handleMapClick}
+            heading={heading}
+          />
+          <NavPanel 
+            destination={destination}
+            routeData={routeData}
+            routeLoading={routeLoading}
+            routeError={routeError}
+            arActive={arActive}
+            onStartAr={handleStartAr}
+            onStopAr={() => setArActive(false)}
+            onRecenter={handleRecenter}
+            onClear={handleClear}
+            remainingDistanceM={remainingDist}
+            realign={realign}
+            onToggleRealign={handleToggleRealign}
+            compact={compactNav}
+          />
+        </div>
       </div>
     </main>
   );

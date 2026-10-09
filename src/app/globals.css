@@ -1,26 +1,66 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --aw-bg: #121b2c;
+  --aw-surface: #1e2a41;
+  --aw-surface-2: #26334d;
+  --aw-border: #2c3a55;
+  --aw-accent: #dbb996;
+  --aw-cream: #f3e7d6;
+  --aw-muted: #9fb1d1;
+  --aw-green: #5ccf8e;
+  --aw-maroon: #6a3836;
+  --aw-nav: #16223a;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html, body {
+  background: var(--aw-bg);
+  color: var(--aw-cream);
+  font-family: var(--font-body), system-ui, sans-serif;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* ::-webkit-scrollbar, ::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+.aw-card {
+  background: var(--aw-surface);
+}
+
+.aw-chip {
+  background: var(--aw-surface);
+  color: var(--aw-muted);
+}
+
+.aw-btn-primary {
+  background: var(--aw-accent);
+  color: #121b2c;
+}
+
+.aw-btn-outline {
+  border: 1px solid var(--aw-cream);
+  color: var(--aw-cream);
+}
+
+.aw-pill {
+  background: var(--aw-surface);
+  color: var(--aw-muted);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
