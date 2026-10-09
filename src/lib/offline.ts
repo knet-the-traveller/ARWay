@@ -52,14 +52,16 @@ export function buildTileList(userPos?: { lat: number; lng: number }): string[] 
   return Array.from(urls);
 }
 
-// Hook returning live online status
+// Hook returning live online status, safe for SSR hydration
 export function useOnlineStatus(): boolean {
-  const [online, setOnline] = useState<boolean>(() => {
-    return typeof navigator !== "undefined" ? navigator.onLine : true;
-  });
+  const [online, setOnline] = useState<boolean>(true);
+  const [mounted, setMounted] = useState<boolean>(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    setMounted(true);
+    if (typeof navigator !== "undefined") {
+      setOnline(navigator.onLine);
+    }
 
     const handleOnline = () => setOnline(true);
     const handleOffline = () => setOnline(false);
@@ -73,7 +75,7 @@ export function useOnlineStatus(): boolean {
     };
   }, []);
 
-  return online;
+  return mounted ? online : true;
 }
 
 // Warm pages and extracted static script/css chunks

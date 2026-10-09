@@ -17,6 +17,7 @@ import {
 
 export default function OfflineSetupPage() {
   const isOnline = useOnlineStatus();
+  const [mounted, setMounted] = useState<boolean>(false);
 
   // Status block state
   const [swActive, setSwActive] = useState<boolean>(false);
@@ -54,6 +55,7 @@ export default function OfflineSetupPage() {
   };
 
   useEffect(() => {
+    setMounted(true);
     refreshStatus();
   }, []);
 
@@ -190,11 +192,11 @@ export default function OfflineSetupPage() {
       {/* HEADER */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-white tracking-tight">Offline setup</h1>
-        <div className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${
-          isOnline ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30" : "bg-amber-950/80 text-amber-400 border border-amber-500/30"
+        <div suppressHydrationWarning className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${
+          (mounted ? isOnline : true) ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30" : "bg-amber-950/80 text-amber-400 border border-amber-500/30"
         }`}>
-          <span className={`w-2 h-2 rounded-full ${isOnline ? "bg-emerald-400" : "bg-amber-400"}`} />
-          {isOnline ? "Online" : "Offline"}
+          <span className={`w-2 h-2 rounded-full ${(mounted ? isOnline : true) ? "bg-emerald-400" : "bg-amber-400"}`} />
+          <span suppressHydrationWarning>{(mounted ? isOnline : true) ? "Online" : "Offline"}</span>
         </div>
       </div>
 
@@ -202,19 +204,19 @@ export default function OfflineSetupPage() {
       <section className="bg-neutral-900 border border-neutral-800 rounded-xl p-3.5 mb-5 space-y-2 text-xs">
         <div className="flex justify-between items-center">
           <span className="text-neutral-400">Service Worker</span>
-          <span className={swActive ? "text-emerald-400 font-medium" : "text-amber-400 font-medium"}>
+          <span suppressHydrationWarning className={swActive ? "text-emerald-400 font-medium" : "text-amber-400 font-medium"}>
             {swActive ? "Active" : "Not active (open HTTPS prod)"}
           </span>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-neutral-400">Storage Used</span>
-          <span className="text-neutral-200 font-mono">
+          <span suppressHydrationWarning className="text-neutral-200 font-mono">
             {storageInfo.usedMb} MB / {storageInfo.quotaMb} MB
           </span>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-neutral-400">Persistence Granted</span>
-          <span className={persistent ? "text-emerald-400 font-medium" : "text-neutral-400"}>
+          <span suppressHydrationWarning className={persistent ? "text-emerald-400 font-medium" : "text-neutral-400"}>
             {persistent ? "Yes" : "No"}
           </span>
         </div>
@@ -229,9 +231,9 @@ export default function OfflineSetupPage() {
       <div className="mb-6 space-y-3">
         <button
           onClick={handlePrepare}
-          disabled={!isOnline || isPreparing}
+          disabled={!(mounted ? isOnline : true) || isPreparing}
           className={`w-full h-11 rounded-xl font-semibold text-sm transition-all flex items-center justify-center ${
-            !isOnline
+            !(mounted ? isOnline : true)
               ? "bg-neutral-800 text-neutral-500 cursor-not-allowed"
               : isPreparing
               ? "bg-blue-600/50 text-white cursor-wait"
@@ -241,7 +243,7 @@ export default function OfflineSetupPage() {
           {isPreparing ? "Preparing data..." : "Prepare offline"}
         </button>
 
-        {!isOnline && (
+        {mounted && !isOnline && (
           <p className="text-amber-400/90 text-xs text-center font-medium">
             Connect to the internet once to prepare
           </p>
