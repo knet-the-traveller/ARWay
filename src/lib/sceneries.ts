@@ -5,6 +5,7 @@ export interface Scenery {
   lat: number;
   lng: number;
   image?: string;
+  images?: string[];
 }
 
 export const sceneries: Scenery[] = [

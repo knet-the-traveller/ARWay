@@ -165,52 +165,40 @@ export default function LandmarkScanner({ video }: LandmarkScannerProps) {
 
   return (
     <div className="absolute inset-0 pointer-events-none z-20 flex flex-col">
-      {/* Privacy Badge */}
-      {isScanning && (
-        <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center shadow-sm">
-          <LockIcon className="w-3.5 h-3.5 text-green-400 mr-2" />
-          <span className="text-white text-[11px] font-medium">On-device AI &middot; no photos leave your phone</span>
-        </div>
-      )}
-
-      {/* Debug Toggle */}
-      {isScanning && loadingPhase === "done" && (
-        <button 
-          onClick={() => setShowDebug(!showDebug)}
-          className="absolute top-4 right-4 w-[44px] h-[44px] rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-gray-300 pointer-events-auto active:bg-black/80 shadow-sm"
-        >
-          <BugIcon className="w-5 h-5" />
-        </button>
-      )}
-
-      {/* Debug Overlay */}
-      {showDebug && debugInfo && (
-        <div className="absolute top-16 right-4 w-[240px] bg-black/80 backdrop-blur-md rounded-xl p-3 text-[11px] text-green-400 font-mono shadow-lg pointer-events-auto overflow-hidden">
-          <p className="text-white mb-1">Device: {deviceUsed}</p>
-          <p className="mb-2">Time: {Math.round(debugInfo.ms)}ms</p>
-          <p className="text-gray-400 mb-1 border-b border-gray-700 pb-1">Top 3 matches:</p>
-          {debugInfo.top3.map((m: any, i: number) => (
-            <div key={i} className="flex justify-between truncate">
-              <span className="truncate mr-2">{m.name}</span>
-              <span>{m.score.toFixed(3)}</span>
+      {/* Top Section */}
+      <div className="absolute top-4 left-4 right-4 flex flex-col gap-2 z-30 pointer-events-none">
+        <div className="flex justify-between items-start">
+          {/* Privacy Badge */}
+          {isScanning ? (
+            <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center shadow-sm">
+              <LockIcon className="w-3.5 h-3.5 text-green-400 mr-2 flex-shrink-0" />
+              <span className="text-white text-[11px] font-medium whitespace-nowrap">On-device AI</span>
             </div>
-          ))}
-          <p className="mt-2 text-yellow-400">Margin: {debugInfo.margin.toFixed(3)}</p>
-          <p className="text-gray-500 mt-1">Req: sc&gt;={MIN_SCORE} mg&gt;={MIN_MARGIN}</p>
-        </div>
-      )}
+          ) : <div />}
 
-      {/* Neutral State */}
-      {isScanning && isNeutral && !topMatch && loadingPhase === "done" && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 flex items-center shadow-md transition-opacity">
-          <span className="text-white text-[13px] font-medium">
-            {debugInfo && debugInfo.top3[0]?.score < 0.6 ? "Not sure" : "Looking for a landmark..."}
-          </span>
+          {/* Debug Toggle */}
+          {isScanning && loadingPhase === "done" && (
+            <button 
+              onClick={() => setShowDebug(!showDebug)}
+              className="w-[44px] h-[44px] rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-gray-300 pointer-events-auto active:bg-black/80 shadow-sm flex-shrink-0"
+            >
+              <BugIcon className="w-5 h-5" />
+            </button>
+          )}
         </div>
-      )}
 
-      {/* Bottom Area */}
-      <div className="mt-auto p-4 flex flex-col items-center gap-4 w-full">
+        {/* Neutral State / Status Pill */}
+        {isScanning && isNeutral && !topMatch && loadingPhase === "done" && (
+          <div className="self-start bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 flex items-center shadow-md transition-opacity">
+            <span className="text-white text-[13px] font-medium">
+              {debugInfo && debugInfo.top3[0]?.score < MIN_SCORE ? "Not sure" : "Looking for a landmark..."}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Section */}
+      <div className="mt-auto p-4 flex flex-col items-center gap-4 w-full z-30 pointer-events-none">
         
         {/* Loading State */}
         {(loadingPhase === "model" || loadingPhase === "references") && (
@@ -233,6 +221,31 @@ export default function LandmarkScanner({ video }: LandmarkScannerProps) {
             <p className="text-gray-400 text-[13px] text-center mb-4">{loadError}</p>
             <button onClick={startScanning} className="bg-gray-700 text-white rounded-lg px-6 py-2 text-[14px] font-semibold active:bg-gray-600">Retry</button>
           </div>
+        )}
+
+        {/* Debug Panel (Bottom Area) */}
+        {showDebug && debugInfo && isScanning && loadingPhase === "done" && (
+          topMatch ? (
+            // Compact line if result card is showing
+            <div className="w-full bg-black/80 backdrop-blur-md rounded-lg p-2 text-[11px] text-green-400 font-mono shadow-lg pointer-events-auto truncate text-center">
+              {deviceUsed} | {Math.round(debugInfo.ms)}ms | {debugInfo.top3[0]?.name} ({(debugInfo.top3[0]?.score || 0).toFixed(3)})
+            </div>
+          ) : (
+            // Full panel otherwise
+            <div className="w-full max-h-[40vh] overflow-y-auto bg-black/80 backdrop-blur-md rounded-xl p-3 text-[11px] text-green-400 font-mono shadow-lg pointer-events-auto">
+              <p className="text-white mb-1">Device: {deviceUsed}</p>
+              <p className="mb-2">Time: {Math.round(debugInfo.ms)}ms</p>
+              <p className="text-gray-400 mb-1 border-b border-gray-700 pb-1">Top 3 matches:</p>
+              {debugInfo.top3.map((m: any, i: number) => (
+                <div key={i} className="flex justify-between truncate">
+                  <span className="truncate mr-2">{m.name}</span>
+                  <span>{m.score.toFixed(3)}</span>
+                </div>
+              ))}
+              <p className="mt-2 text-yellow-400">Margin: {debugInfo.margin.toFixed(3)}</p>
+              <p className="text-gray-500 mt-1">Req: sc&gt;={MIN_SCORE} mg&gt;={MIN_MARGIN}</p>
+            </div>
+          )
         )}
 
         {/* Match Result Card */}
