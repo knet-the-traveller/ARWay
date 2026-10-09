@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { useState } from "react";
 import { getUser, signIn } from "@/lib/user";
 
@@ -25,7 +26,7 @@ export default function SignInScreen({ onSignIn }: SignInScreenProps) {
   };
 
   return (
-    <main className="flex flex-col w-full flex-1 bg-black text-white items-center justify-center p-6">
+    <main className="flex flex-col w-full flex-1 bg-black text-white items-center justify-center p-6 select-none">
       <div className="w-full max-w-sm flex flex-col items-center">
         <h1 className="text-4xl font-bold mb-2">ARWay</h1>
         <p className="text-gray-400 mb-8">Find your way, in AR.</p>
@@ -53,9 +54,22 @@ export default function SignInScreen({ onSignIn }: SignInScreenProps) {
             Sign In
           </button>
         </form>
-        <p className="text-gray-500 text-sm mt-4 text-center">
-          Prototype: no password needed.
-        </p>
+
+        <div className="mt-5 text-center space-y-2">
+          <p className="text-neutral-400 text-[11px] leading-relaxed">
+            By signing in, you agree to ARWay&apos;s{" "}
+            <Link href="/terms" target="_blank" className="text-blue-400 underline hover:text-blue-300">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" target="_blank" className="text-blue-400 underline hover:text-blue-300">
+              Privacy Policy
+            </Link>.
+          </p>
+          <p className="text-neutral-500 text-[10px]">
+            Your profile is stored 100% locally on this device. No password or cloud account needed.
+          </p>
+        </div>
       </div>
     </main>
   );

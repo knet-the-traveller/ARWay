@@ -1,4 +1,5 @@
 import BottomNav from "./BottomNav";
+import LegalConsentModal from "./LegalConsentModal";
 
 export default function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
@@ -11,6 +12,9 @@ export default function PhoneFrame({ children }: { children: React.ReactNode }) 
         
         {/* Bottom Navigation */}
         <BottomNav />
+
+        {/* First-Launch Legal & Privacy Consent Modal */}
+        <LegalConsentModal />
       </div>
     </div>
   );

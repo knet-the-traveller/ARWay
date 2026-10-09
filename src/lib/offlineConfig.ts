@@ -10,7 +10,9 @@ export const ROUTES_TO_CACHE: string[] = [
   "/maps",
   "/sceneries",
   "/shop",
-  "/profile"
+  "/profile",
+  "/privacy",
+  "/terms"
 ];
 
 // 2. Demo areas for offline map tiles pre-caching
