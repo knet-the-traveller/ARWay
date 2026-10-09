@@ -229,22 +229,30 @@ export default function OfflineSetupPage() {
             </span>
           </div>
 
-          <ul className="space-y-2 text-xs text-neutral-300">
+          <ul className="space-y-2.5 text-xs text-neutral-300">
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
-              <span><strong>Vision model:</strong> Quantized CLIP neural network for on-device landmark recognition</span>
+              <span>
+                <strong className="text-white">Visual Landmark AI (120 MB):</strong> On-device CLIP vision model identifies Manila Cathedral, Fort Santiago & San Agustin Church.
+              </span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
-              <span><strong>Reference embeddings:</strong> 14 heritage landmark photo vectors</span>
+              <span>
+                <strong className="text-white">Offline Street Maps (4 MB):</strong> High-detail street tiles for Intramuros and Makati.
+              </span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
-              <span><strong>Map tiles:</strong> Intramuros & Makati demo area zoom tiles (14–17)</span>
+              <span>
+                <strong className="text-white">Point-and-Discover AR:</strong> Spatial compass ribbon guides you straight to targets with 0 cloud latency.
+              </span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
-              <span><strong>App shell:</strong> Offline recovery pages and static assets</span>
+              <span>
+                <strong className="text-white">App Shell & Assets (1 MB):</strong> Offline recovery pages and static assets for dead-zone operation.
+              </span>
             </li>
           </ul>
         </section>
