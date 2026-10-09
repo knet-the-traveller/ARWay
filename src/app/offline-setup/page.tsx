@@ -222,37 +222,33 @@ export default function OfflineSetupPage() {
 
         {/* ASSETS SUMMARY CARD */}
         <section className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 mb-4">
-          <div className="flex justify-between items-center mb-3">
+          <div className="flex justify-between items-center mb-2">
             <h2 className="text-xs font-semibold text-white">Local Cache Assets</h2>
             <span suppressHydrationWarning className="text-[11px] font-mono text-neutral-400">
               {storageInfo.usedMb} MB / {storageInfo.quotaMb || 10240} MB
             </span>
           </div>
 
-          <ul className="space-y-2.5 text-xs text-neutral-300">
+          <p className="text-xs text-neutral-400 leading-relaxed mb-3">
+            Syncing stores all required models and maps locally so tourists in stone fortresses and historical zones can navigate streets and scan landmarks with zero cellular data or roaming fees.
+          </p>
+
+          <ul className="space-y-2 text-xs text-neutral-300 border-t border-neutral-800/80 pt-3">
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
-              <span>
-                <strong className="text-white">Visual Landmark AI (120 MB):</strong> On-device CLIP vision model identifies Manila Cathedral, Fort Santiago & San Agustin Church.
-              </span>
+              <span><strong>Vision model:</strong> Quantized CLIP neural network for on-device landmark recognition</span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
-              <span>
-                <strong className="text-white">Offline Street Maps (4 MB):</strong> High-detail street tiles for Intramuros and Makati.
-              </span>
+              <span><strong>Reference embeddings:</strong> 14 heritage landmark photo vectors</span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
-              <span>
-                <strong className="text-white">Point-and-Discover AR:</strong> Spatial compass ribbon guides you straight to targets with 0 cloud latency.
-              </span>
+              <span><strong>Map tiles:</strong> Intramuros & Makati demo area zoom tiles (14–17)</span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
-              <span>
-                <strong className="text-white">App Shell & Assets (1 MB):</strong> Offline recovery pages and static assets for dead-zone operation.
-              </span>
+              <span><strong>App shell:</strong> Offline recovery pages and static assets</span>
             </li>
           </ul>
         </section>
