@@ -62,7 +62,7 @@ The embeddings for reference places (sceneries) are generated using crops and fl
 
 | Home Feed | AR Navigation View | Landmark Recognition Result | Offline Setup Page |
 |---|---|---|---|
-| ![Home Feed](docs/screenshots/home-feed.jpg) | ![AR Navigation View](docs/screenshots/ar-navigation.png) | ![Landmark Recognition Result](docs/screenshots/landmark-recognition.png) | ![Offline Setup Page](docs/screenshots/offline-setup.png) |
+| ![Home Feed](docs/screenshots/home-feed.jpg) | ![AR Navigation View](docs/screenshots/ar-navigation.jpg) | ![Landmark Recognition Result](docs/screenshots/landmark-recognition.jpg) | ![Offline Setup Page](docs/screenshots/offline-setup.jpg) |
 
 - **Measured performance:** Measured on the in-app test page with 224x224 inputs on the Android phone above, WebGPU backend, during development; numbers will vary by device.
   | Metric | Value |
