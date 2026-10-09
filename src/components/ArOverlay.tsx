@@ -287,9 +287,9 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           
           const alphaFade = Math.max(0, 1 - (d1 / LOOKAHEAD_M));
           
-          ctx.fillStyle = `rgba(59, 130, 246, ${isSteering ? 0.28 * alphaFade : 0.4 * alphaFade})`;
-          ctx.strokeStyle = `rgba(255, 255, 255, ${isSteering ? 0.6 * alphaFade : 0.8 * alphaFade})`;
-          ctx.lineWidth = 2 * window.devicePixelRatio;
+          ctx.fillStyle = `rgba(37, 99, 235, ${isSteering ? 0.35 * alphaFade : 0.55 * alphaFade})`;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${isSteering ? 0.75 * alphaFade : 0.95 * alphaFade})`;
+          ctx.lineWidth = 2.5 * window.devicePixelRatio;
           
           ctx.beginPath();
           ctx.moveTo(spts[0]!.sx, spts[0]!.sy);
@@ -340,8 +340,10 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
             const spts = pts3d.map(screenProject);
             if (spts.every(sp => sp !== null)) {
               const alphaFade = Math.max(0, 1 - (actualD / LOOKAHEAD_M));
-              ctx.strokeStyle = `rgba(255, 255, 255, ${0.9 * alphaFade})`;
-              ctx.lineWidth = 3 * window.devicePixelRatio;
+              ctx.strokeStyle = `rgba(255, 255, 255, ${0.95 * alphaFade})`;
+              ctx.lineWidth = 3.5 * window.devicePixelRatio;
+              ctx.lineCap = "round";
+              ctx.lineJoin = "round";
               ctx.beginPath();
               ctx.moveTo(spts[0]!.sx, spts[0]!.sy);
               ctx.lineTo(spts[1]!.sx, spts[1]!.sy);
