@@ -22,7 +22,8 @@ export interface DemoArea {
 
 export const DEMO_AREAS: DemoArea[] = [
   { name: "SM Makati / Ayala Center", lat: 14.5494, lng: 121.0267 },
-  { name: "Rizal Park (Luneta)", lat: 14.5826, lng: 120.9787 }
+  { name: "Rizal Park (Luneta)", lat: 14.5826, lng: 120.9787 },
+  { name: "Bonifacio Global City (BGC)", lat: 14.5507, lng: 121.0494 }
 ];
 
 // 3. Tile plan: zoom levels and grid radius around each demo area center

@@ -73,8 +73,14 @@ export default function MapView({
     }
     container.innerHTML = "";
 
-    const defaultCenter = { lat: 14.5917, lng: 120.9734 }; // Manila Cathedral / Intramuros Demo Area
-    const initialCenter = position || destination || defaultCenter;
+    let lastPos: { lat: number; lng: number } | null = null;
+    try {
+      const saved = localStorage.getItem("arway_last_position");
+      if (saved) lastPos = JSON.parse(saved);
+    } catch (e) {}
+
+    const defaultCenter = { lat: 14.5700, lng: 121.0000 }; // Metro Manila Central
+    const initialCenter = position || destination || lastPos || defaultCenter;
 
     let map: L.Map;
     try {

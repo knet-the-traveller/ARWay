@@ -82,48 +82,33 @@ export default function NavPanel({
     ? "Live route" 
     : routeData?.source === "cache" 
     ? "Offline street route" 
-    : "Direct line";
+    : routeData?.source === "corridor"
+    ? "Street corridor guide"
+    : "Direct guide";
 
   const sourceColor = routeLoading
     ? "bg-blue-500/20 text-blue-300"
-    : routeData?.source === "straight" 
-    ? "bg-amber-500/20 text-amber-300" 
+    : routeData?.source === "network" 
+    ? "bg-blue-500/20 text-blue-300" 
     : routeData?.source === "cache" 
     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
-    : "bg-gray-800 text-gray-300";
+    : "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30";
 
   return (
-    <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-3 max-h-[140px]">
+    <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-3">
       <div className="flex justify-between items-start">
         <div className="flex-1 min-w-0 pr-2">
           <h3 className="text-[17px] font-semibold truncate leading-tight">{destination.name}</h3>
-          <div className="flex items-center text-[13px] text-gray-400 mt-0.5 gap-2">
+          <div className="flex items-center text-[13px] text-gray-400 mt-1 gap-2 flex-wrap">
             <span className="font-medium text-white">{distText}</span>
             <span>&middot;</span>
             <span>{etaMins} min</span>
             <span>&middot;</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-md truncate ${sourceColor}`}>{sourceLabel}</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-md font-medium truncate ${sourceColor}`}>{sourceLabel}</span>
           </div>
-          <p className="text-[14px] text-blue-400 font-medium mt-1 truncate">
+          <p className="text-[14px] text-blue-400 font-medium mt-1.5 truncate">
             {stepText}
           </p>
-        </div>
-        
-        <div className="flex flex-col gap-1 flex-shrink-0">
-          <label className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded">
-            <input type="checkbox" checked={simulatedWalk} onChange={onToggleSimulate} className="w-3 h-3 accent-blue-500" />
-            Demo mode
-          </label>
-          {simulatedWalk && (
-            <button 
-              onPointerDown={() => onHoldWalk(true)} 
-              onPointerUp={() => onHoldWalk(false)}
-              onPointerLeave={() => onHoldWalk(false)}
-              className="bg-blue-600/30 text-blue-300 rounded text-xs py-1 h-[24px] font-semibold select-none active:bg-blue-600 active:text-white transition-colors"
-            >
-              Hold to Walk
-            </button>
-          )}
         </div>
       </div>
 

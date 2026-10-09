@@ -23,13 +23,16 @@ export function tileCoords(lat: number, lng: number, zoom: number): { x: number;
   return { x, y, z: zoom };
 }
 
-// Build de-duplicated list of tile URLs for demo zones
+// Build de-duplicated list of tile URLs for demo zones and user location
 export function buildTileList(userPos?: { lat: number; lng: number }): string[] {
   const urls = new Set<string>();
-  const centers = [...DEMO_AREAS];
-  if (userPos) {
+  const centers: { name: string; lat: number; lng: number }[] = [];
+  
+  // If user GPS is provided, prioritize venue location first before hitting tile budget
+  if (userPos && userPos.lat && userPos.lng) {
     centers.push({ name: "Current Position", lat: userPos.lat, lng: userPos.lng });
   }
+  centers.push(...DEMO_AREAS);
 
   for (const center of centers) {
     for (const plan of TILE_PLAN) {
@@ -229,11 +232,15 @@ export async function prepareAi(
 
 // Warm map tiles sequentially
 export async function warmTiles(
-  onProgress?: (current: number, total: number, label: string) => void
+  arg1?: { lat: number; lng: number } | ((current: number, total: number, label: string) => void),
+  arg2?: (current: number, total: number, label: string) => void
 ): Promise<number> {
   if (typeof window === "undefined") return 0;
 
-  const tileUrls = buildTileList();
+  const userPos = typeof arg1 === "object" && arg1 !== null ? arg1 : undefined;
+  const onProgress = typeof arg1 === "function" ? arg1 : arg2;
+
+  const tileUrls = buildTileList(userPos);
   let successCount = 0;
   let consecutiveFailures = 0;
 
