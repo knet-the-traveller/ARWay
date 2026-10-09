@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function LegalConsentModal() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -28,21 +30,26 @@ export default function LegalConsentModal() {
     setIsOpen(false);
   };
 
-  if (!mounted || !isOpen) return null;
+  // Do not render on /privacy or /terms so users can read the full documents without obstruction
+  if (!mounted || !isOpen || pathname === "/privacy" || pathname === "/terms") {
+    return null;
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in select-none">
-      <div className="relative w-full max-w-sm bg-[#121318] border border-white/10 rounded-2xl shadow-2xl p-5 text-white flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+      <div className="relative w-full max-w-sm bg-[#121318] border border-white/15 rounded-2xl shadow-2xl p-5 text-white flex flex-col gap-4 max-h-[85vh] overflow-y-auto overscroll-contain touch-pan-y">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="font-bold text-base tracking-tight text-white">Welcome to ARWay</h3>
-            <p className="text-xs text-neutral-400">Offline Landmark Vision &amp; Wayfinder</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-base tracking-tight text-white">Welcome to ARWay</h3>
+              <p className="text-xs text-neutral-400">Offline Landmark Vision &amp; Wayfinder</p>
+            </div>
           </div>
         </div>
 
@@ -86,7 +93,6 @@ export default function LegalConsentModal() {
         <div className="flex items-center justify-between text-[11px] text-neutral-400 px-1">
           <Link 
             href="/privacy" 
-            target="_blank"
             className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
           >
             Privacy &amp; Cookie Policy
@@ -94,7 +100,6 @@ export default function LegalConsentModal() {
           <span className="text-neutral-600">•</span>
           <Link 
             href="/terms" 
-            target="_blank"
             className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
           >
             Terms of Service
