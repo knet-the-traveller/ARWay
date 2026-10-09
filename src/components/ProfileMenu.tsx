@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { 
   CloseIcon, 
   BellIcon, 
@@ -16,6 +17,7 @@ interface ProfileMenuProps {
 }
 
 export default function ProfileMenu({ onClose, onSignOut }: ProfileMenuProps) {
+  const router = useRouter();
   const [notifications, setNotifications] = useState(true);
   const [units, setUnits] = useState("km");
   
@@ -71,6 +73,28 @@ export default function ProfileMenu({ onClose, onSignOut }: ProfileMenuProps) {
         </div>
 
         <div className="flex flex-col flex-1 overflow-y-auto">
+          {/* Offline Mode & Data Setup */}
+          <div 
+            className="flex items-center justify-between px-4 py-3 border-b border-[#262626] active:bg-[#262626] transition-colors cursor-pointer" 
+            onClick={() => {
+              onClose();
+              router.push("/offline-setup");
+            }}
+          >
+            <div className="flex items-center">
+              <div className="w-6 h-6 rounded-full bg-blue-500/20 text-[#3b82f6] flex items-center justify-center mr-3 shrink-0">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[15px] font-medium text-white">Offline Sync</span>
+                <span className="text-[11px] text-gray-400">Sync local AI model & map tiles</span>
+              </div>
+            </div>
+            <ChevronRightIcon className="w-5 h-5 text-gray-500" />
+          </div>
+
           {/* Notifications */}
           <div className="flex items-center justify-between px-4 h-[52px] border-b border-[#262626]">
             <div className="flex items-center">

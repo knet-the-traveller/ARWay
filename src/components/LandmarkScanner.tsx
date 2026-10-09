@@ -1,5 +1,9 @@
+"use client";
+
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useOnlineStatus } from "@/lib/offline";
 import { 
   loadRecognizer, 
   prepareReferences, 
@@ -17,6 +21,18 @@ interface LandmarkScannerProps {
 
 export default function LandmarkScanner({ video, arActive }: LandmarkScannerProps) {
   const router = useRouter();
+  const isOnline = useOnlineStatus();
+  const [isOfflineReady, setIsOfflineReady] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const ready = localStorage.getItem("arway_offline_ready");
+        setIsOfflineReady(!!ready);
+      }
+    } catch (e) {}
+  }, []);
+
   const [isScanning, setIsScanning] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<"idle" | "model" | "references" | "done" | "error">("idle");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -229,7 +245,42 @@ export default function LandmarkScanner({ video, arActive }: LandmarkScannerProp
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-30 pointer-events-none">
         
         {/* Left Column */}
-        <div className="flex flex-col gap-2 items-start w-[30%]">
+        <div className="flex flex-col gap-2 items-start max-w-[65%]">
+          {/* Offline Sync Status Badge */}
+          <Link
+            href="/offline-setup"
+            className={`pointer-events-auto backdrop-blur-md rounded-full px-3 py-1.5 flex items-center shadow-md border transition-all active:scale-95 ${
+              !isOfflineReady
+                ? "bg-black/75 border-red-500/40 text-red-200 shadow-red-950/20"
+                : isOnline
+                  ? "bg-black/75 border-emerald-500/40 text-emerald-300 shadow-emerald-950/20"
+                  : "bg-black/75 border-sky-400/50 text-sky-200 shadow-sky-950/20"
+            }`}
+            title={
+              !isOfflineReady
+                ? "Tap to sync offline maps and on-device AI"
+                : isOnline
+                  ? "Offline assets synced to device"
+                  : "Running 100% on-device (offline)"
+            }
+          >
+            <span
+              className={`w-2 h-2 rounded-full mr-2 shrink-0 ${
+                !isOfflineReady
+                  ? "bg-red-500 shadow-[0_0_6px_#ef4444]"
+                  : isOnline
+                    ? "bg-emerald-400 shadow-[0_0_6px_#10b981]"
+                    : "bg-sky-400 shadow-[0_0_6px_#38bdf8]"
+              }`}
+            />
+            <span className="text-[11px] font-semibold whitespace-nowrap">
+              {!isOfflineReady
+                ? "Offline Not Sync"
+                : isOnline
+                  ? "Offline Synced"
+                  : "Offline Mode"}
+            </span>
+          </Link>
           {/* Privacy Badge */}
           {isScanning && (
             <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center shadow-sm">

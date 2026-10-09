@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 import { LatLng, haversineDistanceM, bearingDeg, normalizeAngle, snapToRoute, sliceAhead, offsetLatLng, lateralOffsetMeters } from "@/lib/geo";
 
@@ -53,12 +55,11 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
   useEffect(() => {
     if (active) {
       setShowSafety(true);
-      // Wait a frame to trigger the transition
       requestAnimationFrame(() => setSafetyOpacity(1));
       
       const fadeTimer = setTimeout(() => {
         setSafetyOpacity(0);
-      }, 4500); // Start fading out before 5s
+      }, 4500);
       
       const unmountTimer = setTimeout(() => {
         setShowSafety(false);
@@ -85,205 +86,155 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
   }, [heading, position, accuracy, route, destination, pitch, realign]);
 
   useEffect(() => {
-    if (!active) {
-      if (canvasRef.current) {
-        const ctx = canvasRef.current.getContext("2d");
-        if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-        canvasClearedRef.current = true;
-      }
-      return;
-    }
-    
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     let animationId: number;
-    let resizeObserver: ResizeObserver;
 
-    const updateSize = () => {
-      const rect = canvas.parentElement?.getBoundingClientRect();
-      if (rect) {
-        canvas.width = rect.width * window.devicePixelRatio;
-        canvas.height = rect.height * window.devicePixelRatio;
-        canvas.style.width = `${rect.width}px`;
-        canvas.style.height = `${rect.height}px`;
-      }
+    const handleResize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
     };
 
-    resizeObserver = new ResizeObserver(updateSize);
-    if (canvas.parentElement) {
-      resizeObserver.observe(canvas.parentElement);
-    }
-    updateSize();
+    handleResize();
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(canvas);
 
     const draw = () => {
       animationId = requestAnimationFrame(draw);
-      
+
+      if (!active) {
+        if (!canvasClearedRef.current) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          canvasClearedRef.current = true;
+        }
+        return;
+      }
+      canvasClearedRef.current = false;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
       const now = Date.now();
-      let currentHeading = null;
-      if (lastHeadingRef.current && (now - lastHeadingRef.current.time < HEADING_HOLD_MS)) {
-        currentHeading = lastHeadingRef.current.val;
-      }
-      
-      let currentPos = null;
-      if (lastPositionRef.current && (now - lastPositionRef.current.time < POSITION_HOLD_MS)) {
-        currentPos = lastPositionRef.current.val;
-      }
-      
+      const posObj = lastPositionRef.current;
+      const headObj = lastHeadingRef.current;
       const currentRoute = routeRef.current;
       const currentDest = destinationRef.current;
-      const currentPitch = pitchRef.current;
-      const currentAcc = lastAccuracyRef.current;
-      const currentRealign = realignRef.current;
-      
-      const width = canvas.width;
-      const height = canvas.height;
 
-      // Update HUD visibility
-      if (hudBadgeRef.current && hudLabelRef.current && hudArrowRef.current) {
-        if (!currentHeading || !currentPos || !currentRoute || currentRoute.length === 0) {
-          hudBadgeRef.current.style.display = "none";
-          hudLabelRef.current.style.display = "none";
-        } else {
-          hudBadgeRef.current.style.display = "flex";
-          hudLabelRef.current.style.display = "block";
-        }
+      const hasValidPosition = posObj && (now - posObj.time < POSITION_HOLD_MS);
+      const isWeakGps = !hasValidPosition || (lastAccuracyRef.current !== null && lastAccuracyRef.current > MAX_ACCURACY_M);
+
+      if (!posObj) {
+        return;
       }
 
-      if (!currentPos || !currentRoute || currentRoute.length === 0) return;
+      let currentPos = posObj.val;
 
       try {
-        ctx.clearRect(0, 0, width, height);
-        canvasClearedRef.current = false;
+        const snapped = (currentRoute && currentRoute.length > 1) 
+          ? snapToRoute(currentRoute, currentPos) 
+          : null;
 
-        if (currentHeading === null && !lastHeadingRef.current) {
-          ctx.fillStyle = "white";
-          ctx.font = `${16 * window.devicePixelRatio}px sans-serif`;
-          ctx.textAlign = "center";
-          ctx.fillText("Compass not available", width / 2, height / 2);
+        if (realignRef.current && snapped && currentRoute && currentRoute.length > 1) {
+          const latOffset = lateralOffsetMeters(currentRoute, currentPos);
+          if (Math.abs(latOffset) < MAX_REALIGN_OFFSET_M) {
+            const dNorth = (snapped.snappedPoint.lat - currentPos.lat) * 111139;
+            const dEast = (snapped.snappedPoint.lng - currentPos.lng) * 111139 * Math.cos(currentPos.lat * Math.PI / 180);
+            
+            offsetNorthRef.current += (dNorth - offsetNorthRef.current) * REALIGN_SMOOTHING;
+            offsetEastRef.current += (dEast - offsetEastRef.current) * REALIGN_SMOOTHING;
+            
+            const adjLat = currentPos.lat + offsetNorthRef.current / 111139;
+            const adjLng = currentPos.lng + offsetEastRef.current / (111139 * Math.cos(currentPos.lat * Math.PI / 180));
+            currentPos = { lat: adjLat, lng: adjLng };
+          } else {
+            offsetNorthRef.current *= 0.9;
+            offsetEastRef.current *= 0.9;
+          }
+        } else {
+          offsetNorthRef.current *= 0.9;
+          offsetEastRef.current *= 0.9;
+        }
+
+        const path = (currentRoute && currentRoute.length > 1)
+          ? sliceAhead(currentRoute, currentPos, LOOKAHEAD_M)
+          : (currentDest ? [currentPos, currentDest] : null);
+
+        if (!path || path.length < 2) {
           return;
         }
-        
-        if (currentHeading === null) return;
 
-        const snapped = snapToRoute(currentRoute, currentPos);
-        const rawPath = sliceAhead(currentRoute, snapped, LOOKAHEAD_M);
-        if (rawPath.length < 2) return;
+        const guidePt = path.length > 1 ? path[1] : path[0];
+        const currentHeading = headObj 
+          ? headObj.val 
+          : (guidePt ? bearingDeg(currentPos, guidePt) : 0);
 
-        // Realign logic
-        let targetEast = 0;
-        let targetNorth = 0;
-
-        if (currentRealign && snapped.distanceFromRouteM <= MAX_REALIGN_OFFSET_M) {
-          if (currentAcc !== null && currentAcc <= MAX_ACCURACY_M) {
-            const latOff = lateralOffsetMeters(snapped.snappedPoint, currentPos);
-            targetEast = latOff.east;
-            targetNorth = latOff.north;
-          } else {
-            // freeze last valid offset during weak GPS
-            targetEast = offsetEastRef.current;
-            targetNorth = offsetNorthRef.current;
-          }
-        }
-
-        offsetEastRef.current = offsetEastRef.current * (1 - REALIGN_SMOOTHING) + targetEast * REALIGN_SMOOTHING;
-        offsetNorthRef.current = offsetNorthRef.current * (1 - REALIGN_SMOOTHING) + targetNorth * REALIGN_SMOOTHING;
-
-        const R = 6371e3;
-        const latMid = currentPos.lat * Math.PI / 180;
-        const dLat = (offsetNorthRef.current / R) * 180 / Math.PI;
-        const dLon = (offsetEastRef.current / (R * Math.cos(latMid))) * 180 / Math.PI;
-
-        const isActivelyRealigned = Math.abs(offsetEastRef.current) > 0.05 || Math.abs(offsetNorthRef.current) > 0.05;
-
-        let path = rawPath;
-        if (isActivelyRealigned) {
-          path = rawPath.map(p => ({
-            lat: p.lat + dLat,
-            lng: p.lng + dLon
-          }));
-        } else {
-          // If not realigned, ensure continuity by drawing from current pos if off route
-          if (snapped.distanceFromRouteM > 1.0) {
-            path = [currentPos, ...rawPath];
-          }
-        }
-
-        // Calculate steering S from the shifted path
-        let guidePt = path[0];
-        let dAccum = 0;
-        for (let i = 0; i < path.length; i++) {
-          const d = haversineDistanceM(currentPos, path[i]);
-          if (d >= 6) {
-            guidePt = path[i];
-            break;
-          }
-        }
-        
         const rawS = normalizeAngle(bearingDeg(currentPos, guidePt) - currentHeading);
-        const alphaFilter = 0.2;
-        sCosRef.current = sCosRef.current * (1 - alphaFilter) + Math.cos(rawS * Math.PI / 180) * alphaFilter;
-        sSinRef.current = sSinRef.current * (1 - alphaFilter) + Math.sin(rawS * Math.PI / 180) * alphaFilter;
+        const sRad = rawS * Math.PI / 180;
+        const curCos = Math.cos(sRad);
+        const curSin = Math.sin(sRad);
         
-        let S = Math.atan2(sSinRef.current, sCosRef.current) * 180 / Math.PI;
-        
-        // Update HUD content
-        const absS = Math.abs(S);
-        if (hudBadgeRef.current && hudLabelRef.current && hudArrowRef.current) {
-          hudArrowRef.current.style.transform = `rotate(${S}deg)`;
-          if (absS < ON_ROUTE_DEG) {
-            hudBadgeRef.current.style.backgroundColor = "rgba(22, 163, 74, 0.85)"; // green-600
-            hudLabelRef.current.innerText = "On route";
-          } else if (absS > TURN_AROUND_DEG) {
-            hudBadgeRef.current.style.backgroundColor = "rgba(220, 38, 38, 0.85)"; // red-600
-            hudLabelRef.current.innerText = "Turn around";
-          } else {
-            hudBadgeRef.current.style.backgroundColor = "rgba(217, 119, 6, 0.85)"; // amber-600
-            const dir = S < 0 ? "left" : "right";
-            hudLabelRef.current.innerText = `Turn ${dir} ${Math.round(absS)}°`;
-          }
-        }
+        sCosRef.current += (curCos - sCosRef.current) * 0.15;
+        sSinRef.current += (curSin - sSinRef.current) * 0.15;
+        const smoothedAngle = Math.atan2(sSinRef.current, sCosRef.current) * 180 / Math.PI;
 
+        const absAngle = Math.abs(smoothedAngle);
+        let statusText = "On route";
+        let statusBg = "rgba(22, 163, 74, 0.85)"; // green-600
         let isSteering = false;
-        let angleOffset = 0;
-        if (absS > EDGE_CLAMP_DEG) {
+
+        if (absAngle <= ON_ROUTE_DEG) {
+          statusText = "On route";
+          statusBg = "rgba(22, 163, 74, 0.85)"; // green
+        } else if (absAngle >= TURN_AROUND_DEG) {
+          statusText = "Turn around";
+          statusBg = "rgba(220, 38, 38, 0.85)"; // red
           isSteering = true;
-          angleOffset = S - Math.sign(S) * EDGE_CLAMP_DEG;
-        }
-        
-        const isWeakGps = currentAcc !== null && currentAcc > MAX_ACCURACY_M;
-        if (isWeakGps) {
-          ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-          ctx.beginPath();
-          ctx.roundRect(width / 2 - 60 * window.devicePixelRatio, 20 * window.devicePixelRatio, 120 * window.devicePixelRatio, 30 * window.devicePixelRatio, 15 * window.devicePixelRatio);
-          ctx.fill();
-          ctx.fillStyle = "white";
-          ctx.font = `${14 * window.devicePixelRatio}px sans-serif`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText("Weak GPS", width / 2, 35 * window.devicePixelRatio);
+        } else {
+          statusText = smoothedAngle > 0 ? "Bear right" : "Bear left";
+          statusBg = "rgba(234, 179, 8, 0.85)"; // yellow
+          isSteering = true;
         }
 
-        const f = (width / 2) / Math.tan((CAMERA_HFOV_DEG / 2) * Math.PI / 180);
-        const cx = width / 2;
-        const cy = height / 2;
-        
-        const pitchRad = currentPitch * Math.PI / 180;
+        if (isWeakGps) {
+          statusText += " (Weak GPS)";
+        }
+
+        if (hudBadgeRef.current && hudLabelRef.current && hudArrowRef.current) {
+          hudBadgeRef.current.style.backgroundColor = statusBg;
+          hudLabelRef.current.innerText = statusText;
+          hudArrowRef.current.style.transform = `rotate(${smoothedAngle}deg)`;
+        }
+
+        const w = canvas.width;
+        const h = canvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        const f = (w / 2) / Math.tan((CAMERA_HFOV_DEG * Math.PI / 180) / 2);
+
+        const pitchDeg = pitchRef.current;
+        const pitchRad = pitchDeg * Math.PI / 180;
         const cosPitch = Math.cos(pitchRad);
         const sinPitch = Math.sin(pitchRad);
 
         const projectPoint = (d: number, relAngleDeg: number, yGround: number) => {
-          const steeredRel = relAngleDeg - angleOffset;
+          let steeredRel = relAngleDeg;
+          if (isSteering) {
+            const steerOffset = smoothedAngle > 0 ? -15 : 15;
+            steeredRel += steerOffset;
+          }
+          steeredRel = Math.max(-EDGE_CLAMP_DEG, Math.min(EDGE_CLAMP_DEG, steeredRel));
+
           const relRad = steeredRel * Math.PI / 180;
           const x3d = d * Math.sin(relRad);
           let z3d = d * Math.cos(relRad);
           
-          if (z3d < NEAR_CLIP_M) z3d = NEAR_CLIP_M; // clamp forward distance to prevent dropping
+          if (z3d < NEAR_CLIP_M) z3d = NEAR_CLIP_M;
           
           const y3d = yGround;
-          
           const yRot = y3d * cosPitch - z3d * sinPitch;
           const zRot = y3d * sinPitch + z3d * cosPitch;
           
@@ -291,7 +242,7 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
         };
 
         const screenProject = (pt3d: { x: number, y: number, z: number }) => {
-          if (pt3d.z < 0.1) return null; // fallback safety
+          if (pt3d.z < 0.1) return null;
           return {
             sx: cx + f * pt3d.x / pt3d.z,
             sy: cy + f * pt3d.y / pt3d.z
@@ -323,13 +274,12 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           ];
           
           const pts3d = pts.map(p => projectPoint(p.d, p.rel, CAMERA_HEIGHT_M));
-          
           const spts = pts3d.map(screenProject);
           if (spts.some(sp => sp === null)) continue;
           
           const alphaFade = Math.max(0, 1 - (d1 / LOOKAHEAD_M));
           
-          ctx.fillStyle = `rgba(59, 130, 246, ${isSteering ? 0.28 * alphaFade : 0.4 * alphaFade})`; // blue-500, softer if steering
+          ctx.fillStyle = `rgba(59, 130, 246, ${isSteering ? 0.28 * alphaFade : 0.4 * alphaFade})`;
           ctx.strokeStyle = `rgba(255, 255, 255, ${isSteering ? 0.6 * alphaFade : 0.8 * alphaFade})`;
           ctx.lineWidth = 2 * window.devicePixelRatio;
           
@@ -341,7 +291,7 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           ctx.closePath();
           ctx.fill();
           
-          // outlines
+          // Outlines
           ctx.beginPath();
           if (isSteering) ctx.setLineDash([10 * window.devicePixelRatio, 10 * window.devicePixelRatio]);
           else ctx.setLineDash([]);
@@ -353,7 +303,6 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           ctx.moveTo(spts[1]!.sx, spts[1]!.sy);
           ctx.lineTo(spts[2]!.sx, spts[2]!.sy);
           ctx.stroke();
-          
           ctx.setLineDash([]);
         }
 
@@ -400,11 +349,10 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           const distToDest = haversineDistanceM(currentPos, currentDest);
           if (distToDest < LOOKAHEAD_M) {
             const rel = normalizeAngle(bearingDeg(currentPos, currentDest) - currentHeading);
-            // float it 2m above ground
             const pt3d = projectPoint(distToDest, rel, CAMERA_HEIGHT_M - 2.0);
             const spt = screenProject(pt3d);
             if (spt) {
-              ctx.fillStyle = "rgba(220, 38, 38, 0.9)"; // red-600
+              ctx.fillStyle = "rgba(220, 38, 38, 0.9)";
               ctx.beginPath();
               const r = 8 * window.devicePixelRatio;
               ctx.arc(spt.sx, spt.sy, r, 0, Math.PI * 2);

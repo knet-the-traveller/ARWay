@@ -1,265 +1,305 @@
-import { useState, useRef, useEffect } from "react";
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { haversineDistanceM } from "@/lib/geo";
 import { sceneries } from "@/lib/sceneries";
 import { shops } from "@/lib/shops";
 
-interface PlaceSearchProps {
-  userPosition: { lat: number, lng: number } | null;
-  destinationName: string | null;
-  onSelect: (place: { name: string, lat: number, lng: number }) => void;
-}
-
-interface SearchResult {
+export interface PlaceResult {
+  id: string;
   name: string;
   address: string;
   lat: number;
   lng: number;
-  tag?: "Sceneries" | "Shop" | "Online";
+  tag?: string;
+  distanceM?: number;
 }
 
-const SearchIcon = () => (
-  <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-  </svg>
-);
+interface PlaceSearchProps {
+  userLocation?: { lat: number; lng: number } | null;
+  userPosition?: { lat: number; lng: number } | null;
+  destinationName?: string | null;
+  onSelectPlace?: (place: { lat: number; lng: number; name: string; address?: string }) => void;
+  onSelect?: (place: { lat: number; lng: number; name: string; address?: string }) => void;
+  className?: string;
+}
 
-const ClearIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
-
-export default function PlaceSearch({ userPosition, destinationName, onSelect }: PlaceSearchProps) {
-  const [text, setText] = useState("");
-  const [focused, setFocused] = useState(false);
-  const [onlineResults, setOnlineResults] = useState<SearchResult[]>([]);
-  const [isSearchingOnline, setIsSearchingOnline] = useState(false);
-  const [onlineError, setOnlineError] = useState<string | null>(null);
-  
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const lastSearchTimeRef = useRef<number>(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+export default function PlaceSearch({
+  userLocation,
+  userPosition,
+  destinationName,
+  onSelectPlace,
+  onSelect,
+  className = ""
+}: PlaceSearchProps) {
+  const effectiveUserPos = userLocation || userPosition || null;
+  const [query, setQuery] = useState(destinationName || "");
+  const [results, setResults] = useState<PlaceResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!focused) {
-      if (destinationName) {
-        setText(destinationName);
-      } else {
-        setText("");
+    if (destinationName) {
+      setQuery(destinationName);
+    }
+  }, [destinationName]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
       }
-    }
-  }, [destinationName, focused]);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-  const handleClear = () => {
-    setText("");
-    setOnlineResults([]);
-    setOnlineError(null);
-    inputRef.current?.focus();
-  };
-
-  const handleSelect = (res: SearchResult) => {
-    onSelect({ name: res.name, lat: res.lat, lng: res.lng });
-    setFocused(false);
-    setText(res.name);
-    if (inputRef.current) inputRef.current.blur();
-  };
-
-  // Local filtering
-  const lowerText = text.toLowerCase();
-  const localResults: SearchResult[] = [];
-  
-  if (lowerText.length > 0) {
-    for (const s of sceneries) {
-      if (s.name.toLowerCase().includes(lowerText) || s.address.toLowerCase().includes(lowerText)) {
-        localResults.push({ name: s.name, address: s.address, lat: s.lat, lng: s.lng, tag: "Sceneries" });
-      }
-    }
-    for (const s of shops) {
-      if (s.name.toLowerCase().includes(lowerText) || s.address.toLowerCase().includes(lowerText)) {
-        localResults.push({ name: s.name, address: s.address, lat: s.lat, lng: s.lng, tag: "Shop" });
-      }
-    }
-  }
-  
-  // Truncate to 5 total local places
-  const topLocal = localResults.slice(0, 5);
-  
-  // Deduplicate online results
-  const combined: SearchResult[] = [...topLocal];
-  for (const o of onlineResults) {
-    const isDup = combined.some(c => 
-      c.name === o.name && 
-      Math.abs(c.lat - o.lat) < 0.0001 && 
-      Math.abs(c.lng - o.lng) < 0.0001
-    );
-    if (!isDup) {
-      combined.push(o);
-    }
-  }
-
-  const triggerOnlineSearch = async () => {
-    if (text.length < 3) return;
-    
-    if (!navigator.onLine) {
-      setOnlineError("You're offline. Showing saved places only.");
+  const searchPlaces = async (text: string) => {
+    if (!text.trim() || text.length < 2) {
+      setResults([]);
+      setLoading(false);
       return;
     }
 
-    const now = Date.now();
-    if (now - lastSearchTimeRef.current < 1000) return;
-    lastSearchTimeRef.current = now;
+    setLoading(true);
 
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    // 1. Local search from sceneries and shops (instant & 100% offline ready)
+    const lower = text.toLowerCase();
+    const localMatches: PlaceResult[] = [];
+    for (const s of sceneries) {
+      if (s.name.toLowerCase().includes(lower) || s.address.toLowerCase().includes(lower)) {
+        const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat: s.lat, lng: s.lng }) : undefined;
+        localMatches.push({
+          id: `local-scenery-${s.id}`,
+          name: s.name,
+          address: s.address,
+          lat: s.lat,
+          lng: s.lng,
+          tag: "Heritage",
+          distanceM: dist
+        });
+      }
     }
-    const ac = new AbortController();
-    abortControllerRef.current = ac;
-
-    setOnlineError(null);
-    setIsSearchingOnline(true);
-    setOnlineResults([]);
+    for (const sh of shops) {
+      if (sh.name.toLowerCase().includes(lower) || sh.address.toLowerCase().includes(lower)) {
+        const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat: sh.lat, lng: sh.lng }) : undefined;
+        localMatches.push({
+          id: `local-shop-${sh.id}`,
+          name: sh.name,
+          address: sh.address,
+          lat: sh.lat,
+          lng: sh.lng,
+          tag: "Shop",
+          distanceM: dist
+        });
+      }
+    }
 
     try {
-      let url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(text)}&countrycodes=ph&limit=6&accept-language=en&bounded=0`;
-      if (userPosition) {
-        const { lat, lng } = userPosition;
-        url += `&viewbox=${lng - 0.3},${lat + 0.3},${lng + 0.3},${lat - 0.3}`;
+      // 2. Photon Geocoder (Fast OpenStreetMap Search by Komoot, 0 keys needed)
+      let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&limit=6`;
+      if (effectiveUserPos) {
+        url += `&lat=${effectiveUserPos.lat}&lon=${effectiveUserPos.lng}`;
       }
 
-      const timeoutId = setTimeout(() => ac.abort(), 8000);
-      const response = await fetch(url, { signal: ac.signal });
-      clearTimeout(timeoutId);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch(url, { signal: controller.signal }).catch(() => null);
+      clearTimeout(timeout);
 
-      if (!response.ok) throw new Error("Bad response");
-      
-      const data = await response.json();
-      
-      const mapped = data.map((item: any) => {
-        const parts = item.display_name.split(",");
-        const name = parts[0].trim();
-        const address = parts.slice(1).join(",").trim();
-        return {
-          name,
-          address,
-          lat: parseFloat(item.lat),
-          lng: parseFloat(item.lon),
-          tag: "Online" as const
-        };
-      });
-      setOnlineResults(mapped);
-    } catch (err: any) {
-      if (err.name !== "AbortError") {
-        setOnlineError("Couldn't search online. Check your connection.");
+      const onlineMatches: PlaceResult[] = [];
+
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data && data.features && data.features.length > 0) {
+          data.features.forEach((f: any, idx: number) => {
+            const props = f.properties || {};
+            const coords = f.geometry?.coordinates || [0, 0];
+            const lng = coords[0];
+            const lat = coords[1];
+
+            const name = props.name || props.street || text;
+            const addressParts = [
+              props.street ? `${props.housenumber || ""} ${props.street}`.trim() : null,
+              props.city || props.district || props.county,
+              props.country
+            ].filter(Boolean);
+
+            const address = addressParts.join(", ") || props.country || "Location";
+            const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat, lng }) : undefined;
+
+            onlineMatches.push({
+              id: `photon-${idx}-${lat}-${lng}`,
+              name,
+              address,
+              lat,
+              lng,
+              distanceM: dist
+            });
+          });
+        }
       }
+
+      // Deduplicate and combine
+      const combined = [...localMatches];
+      for (const om of onlineMatches) {
+        const isDup = combined.some(c =>
+          Math.abs(c.lat - om.lat) < 0.0003 && Math.abs(c.lng - om.lng) < 0.0003
+        );
+        if (!isDup) combined.push(om);
+      }
+
+      if (effectiveUserPos) {
+        combined.sort((a, b) => (a.distanceM || 0) - (b.distanceM || 0));
+      }
+
+      setResults(combined);
+      setIsOpen(true);
+    } catch {
+      setResults(localMatches);
+      setIsOpen(localMatches.length > 0);
     } finally {
-      setIsSearchingOnline(false);
+      setLoading(false);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      triggerOnlineSearch();
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setQuery(val);
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
+
+    if (!val.trim()) {
+      setResults([]);
+      setIsOpen(false);
+      return;
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      searchPlaces(val);
+    }, 300);
   };
 
-  const showDropdown = focused && text.length > 0;
+  const handleSelect = (place: PlaceResult) => {
+    setQuery(place.name);
+    setIsOpen(false);
+    const payload = {
+      lat: place.lat,
+      lng: place.lng,
+      name: place.name,
+      address: place.address
+    };
+    onSelectPlace?.(payload);
+    onSelect?.(payload);
+  };
+
+  const handleQuickPreset = (preset: string) => {
+    setQuery(preset);
+    searchPlaces(preset);
+  };
+
+  const formatDistance = (m?: number) => {
+    if (m === undefined) return "";
+    if (m < 1000) return `${Math.round(m)}m`;
+    return `${(m / 1000).toFixed(1)}km`;
+  };
 
   return (
-    <div 
-      className="absolute top-2 left-2 right-2 mr-[56px] z-[1100]"
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="relative w-full h-[44px] bg-zinc-900/92 backdrop-blur-md rounded-full border border-zinc-700 flex items-center px-3 shadow-lg">
-        <SearchIcon />
+    <div ref={containerRef} className={`relative z-50 w-full ${className}`}>
+      {/* SEARCH BAR INPUT */}
+      <div className="relative flex items-center bg-[#1c1c1e]/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg px-3 py-2 text-white">
+        <svg className="w-4 h-4 text-neutral-400 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+          <circle cx="11" cy="11" r="8" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35" />
+        </svg>
+
         <input
-          ref={inputRef}
           type="text"
-          placeholder="Search a place"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => {
-            // Delay hide so clicks on dropdown can process
-            setTimeout(() => setFocused(false), 200);
-          }}
-          onKeyDown={handleKeyDown}
-          className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none px-2 text-[16px]"
+          value={query}
+          onChange={handleInputChange}
+          onFocus={() => query.length >= 2 && setIsOpen(true)}
+          placeholder="Search any building, McDonald's, street..."
+          className="bg-transparent flex-1 text-xs text-white placeholder-neutral-500 focus:outline-none min-w-0"
         />
-        {text.length > 0 && (
-          <button 
-            onClick={handleClear}
-            className="w-11 h-11 flex items-center justify-center text-gray-400 active:text-white"
+
+        {loading && (
+          <div className="w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-1 shrink-0" />
+        )}
+
+        {query && (
+          <button
+            onClick={() => {
+              setQuery("");
+              setResults([]);
+              setIsOpen(false);
+            }}
+            className="w-5 h-5 rounded-full bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center text-xs ml-1 shrink-0"
           >
-            <ClearIcon />
+            ✕
           </button>
         )}
       </div>
 
-      {showDropdown && (
-        <div className="absolute top-[48px] left-0 right-0 max-h-[200px] overflow-y-auto bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-[16px] shadow-xl py-1 flex flex-col no-scrollbar">
-          {combined.map((res, i) => (
+      {/* QUICK PRESET CHIPS */}
+      {!query && (
+        <div className="flex gap-1.5 mt-1.5 px-0.5 overflow-x-auto scrollbar-none">
+          {["McDonald's", "Jollibee", "Coffee", "7-Eleven"].map((chip) => (
             <button
-              key={`${res.name}-${res.lat}-${res.lng}-${i}`}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                handleSelect(res);
-              }}
-              className="w-full text-left px-4 py-2 min-h-[48px] border-b border-zinc-800 last:border-0 active:bg-zinc-800 flex flex-col justify-center"
+              key={chip}
+              onClick={() => handleQuickPreset(chip)}
+              className="text-[10px] px-2.5 py-1 rounded-full bg-neutral-900/80 hover:bg-neutral-800 border border-white/10 text-neutral-300 whitespace-nowrap active:scale-95 transition-all shadow-sm"
             >
-              <div className="flex justify-between items-baseline gap-2">
-                <span className="text-white font-bold text-[14px] truncate">{res.name}</span>
-                {res.tag && (
-                  <span className="text-[10px] text-gray-400 bg-black/40 px-1.5 py-0.5 rounded truncate flex-shrink-0">
-                    {res.tag}
-                  </span>
-                )}
-              </div>
-              <span className="text-gray-400 text-[12px] truncate block w-full">{res.address}</span>
+              {chip}
             </button>
           ))}
-
-          {isSearchingOnline && (
-            <div className="px-4 py-3 min-h-[48px] flex items-center">
-              <span className="text-gray-400 text-[13px]">Searching...</span>
-            </div>
-          )}
-
-          {onlineError && (
-            <div className="px-4 py-3 min-h-[48px] flex items-center">
-              <span className="text-gray-500 text-[13px]">{onlineError}</span>
-            </div>
-          )}
-
-          {!isSearchingOnline && !onlineError && text.length >= 3 && combined.length < 10 && (
-            <button
-              onPointerDown={(e) => {
-                e.preventDefault();
-                triggerOnlineSearch();
-              }}
-              className="w-full text-left px-4 py-3 min-h-[48px] text-[13px] text-blue-400 active:bg-zinc-800 flex items-center border-t border-zinc-800"
-            >
-              Search online for "{text}"
-            </button>
-          )}
-
-          {!isSearchingOnline && combined.length === 0 && !onlineError && (
-            <div className="px-4 py-3 min-h-[48px] flex items-center">
-              <span className="text-gray-500 text-[13px]">No places found</span>
-            </div>
-          )}
         </div>
       )}
-      
-      <style dangerouslySetInnerHTML={{__html: `
-        .no-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}} />
+
+      {/* AUTOCOMPLETE RESULTS DROPDOWN */}
+      {isOpen && results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#1c1c1e]/98 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden divide-y divide-white/5 max-h-[220px] overflow-y-auto z-[500]">
+          {results.map((res) => (
+            <button
+              key={res.id}
+              onClick={() => handleSelect(res)}
+              className="w-full text-left px-3.5 py-2.5 hover:bg-white/5 active:bg-blue-600/20 flex items-center justify-between gap-2 transition-colors group"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-white truncate group-hover:text-blue-400 transition-colors">
+                    {res.name}
+                  </span>
+                  {res.tag && (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      {res.tag}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-neutral-400 truncate mt-0.5">
+                  {res.address}
+                </div>
+              </div>
+
+              {res.distanceM !== undefined && (
+                <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-neutral-800/80 text-neutral-300 border border-white/5 shrink-0">
+                  {formatDistance(res.distanceM)}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isOpen && !loading && query.length >= 2 && results.length === 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-3 text-center text-xs text-neutral-400 z-[500]">
+          No matching places found. Try tapping the map to drop a pin.
+        </div>
+      )}
     </div>
   );
 }
-

@@ -39,3 +39,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+#MDFILES
+guide-planning.md
+medway-planning.md
+sector4-hackathonguide.md
+
+
+
+/Docs/*
+.agents/*
+antigravity-workspace/*
+
+node_modules/
+.next/
+dist/
+.env
+.env.local
