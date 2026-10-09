@@ -20,7 +20,7 @@ Built for AppBuildersPH Hackathon 2026 · Local AI
 
 | Name | Role |
 |---|---|
-| Mark Kenneth Galario | Team Lead, Backend |
+| Mark Kenneth Galario | Team Lead, Backend, AI/ML |
 | Kirby Caranyagan | AI/ML, Backend |
 | Abegail Sonsona | UI/UX, Frontend, Marketing |
 | Mark Andrew Cruz | UI/UX, Frontend, Storyteller |
