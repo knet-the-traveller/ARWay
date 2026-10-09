@@ -79,9 +79,13 @@ export default function NavPanel({
     }
 
     const sourceLabel = routeData.source === "network" ? "Live route" 
-                      : routeData.source === "cache" ? "Saved route (offline)" 
+                      : routeData.source === "cache" ? "Offline street route" 
                       : "Direct line only";
-    const sourceColor = routeData.source === "straight" ? "bg-red-500/20 text-red-400" : "bg-gray-800 text-gray-300";
+    const sourceColor = routeData.source === "straight" 
+      ? "bg-red-500/20 text-red-400" 
+      : routeData.source === "cache" 
+      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+      : "bg-gray-800 text-gray-300";
 
     return (
       <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-3 max-h-[140px]">

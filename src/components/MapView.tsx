@@ -58,21 +58,37 @@ export default function MapView({
     onMapClickRef.current = onMapClick;
   }, [onMapClick]);
 
-  // Initialize Map
+  // Initialize Map and Resize Observer
   useEffect(() => {
-    if (!containerRef.current) return;
-    if (mapRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    let isMounted = true;
+
+    // Reset container if Leaflet previously attached to it
+    if ((container as any)._leaflet_id) {
+      try {
+        delete (container as any)._leaflet_id;
+      } catch {}
+    }
+    container.innerHTML = "";
 
     const defaultCenter = { lat: 14.5917, lng: 120.9734 }; // Manila Cathedral / Intramuros Demo Area
     const initialCenter = position || destination || defaultCenter;
 
-    const map = L.map(containerRef.current, {
-      center: [initialCenter.lat, initialCenter.lng],
-      zoom: 17,
-      minZoom: 14,
-      maxZoom: 19,
-      zoomControl: false,
-    });
+    let map: L.Map;
+    try {
+      map = L.map(container, {
+        center: [initialCenter.lat, initialCenter.lng],
+        zoom: 17,
+        minZoom: 14,
+        maxZoom: 19,
+        zoomControl: false,
+      });
+    } catch (e) {
+      console.warn("Failed to initialize Leaflet map:", e);
+      return;
+    }
 
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:
@@ -89,130 +105,160 @@ export default function MapView({
 
     mapRef.current = map;
 
-    const timer = setTimeout(() => {
-      if (mapRef.current) {
-        mapRef.current.invalidateSize();
+    // ResizeObserver safely guarded against unmount/detach
+    const observer = new ResizeObserver(() => {
+      if (!isMounted) return;
+      const c = containerRef.current;
+      const m = mapRef.current;
+      if (!c || !m || !c.isConnected || c.clientWidth === 0 || c.clientHeight === 0) {
+        return;
       }
-    }, 150);
+      try {
+        m.invalidateSize();
+      } catch {}
+    });
+    observer.observe(container);
+
+    const timer = setTimeout(() => {
+      if (isMounted && mapRef.current && containerRef.current?.isConnected) {
+        try {
+          mapRef.current.invalidateSize();
+        } catch {}
+      }
+    }, 200);
 
     return () => {
+      isMounted = false;
+      observer.disconnect();
       clearTimeout(timer);
+
       if (mapRef.current) {
-        mapRef.current.remove();
+        try {
+          mapRef.current.off();
+          mapRef.current.remove();
+        } catch (e) {
+          // Suppress unmount errors
+        }
         mapRef.current = null;
       }
+
+      if (containerRef.current) {
+        try {
+          delete (containerRef.current as any)._leaflet_id;
+          containerRef.current.innerHTML = "";
+        } catch {}
+      }
+
       posMarkerRef.current = null;
       destMarkerRef.current = null;
       routeOutlineRef.current = null;
       routePolylineRef.current = null;
+      lastRouteStrRef.current = "";
     };
-  }, []);
-
-  // Handle ResizeObserver for layout transitions
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver(() => {
-      if (mapRef.current) {
-        mapRef.current.invalidateSize();
-      }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
   }, []);
 
   // Update position marker & heading
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const container = containerRef.current;
+    if (!map || !container || !container.isConnected) return;
 
-    if (position) {
-      const icon = createCustomIcon(heading);
-      if (!posMarkerRef.current) {
-        posMarkerRef.current = L.marker([position.lat, position.lng], {
-          icon,
-          zIndexOffset: 1000,
-        }).addTo(map);
-      } else {
-        posMarkerRef.current.setLatLng([position.lat, position.lng]);
-        posMarkerRef.current.setIcon(icon);
+    try {
+      if (position) {
+        const icon = createCustomIcon(heading);
+        if (!posMarkerRef.current) {
+          posMarkerRef.current = L.marker([position.lat, position.lng], {
+            icon,
+            zIndexOffset: 1000,
+          }).addTo(map);
+        } else {
+          posMarkerRef.current.setLatLng([position.lat, position.lng]);
+          posMarkerRef.current.setIcon(icon);
+        }
+      } else if (posMarkerRef.current) {
+        posMarkerRef.current.remove();
+        posMarkerRef.current = null;
       }
-    } else if (posMarkerRef.current) {
-      posMarkerRef.current.remove();
-      posMarkerRef.current = null;
-    }
+    } catch {}
   }, [position, heading]);
 
   // Update destination marker & tooltip
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const container = containerRef.current;
+    if (!map || !container || !container.isConnected) return;
 
-    if (destination) {
-      const icon = createDestinationIcon();
-      if (!destMarkerRef.current) {
-        destMarkerRef.current = L.marker([destination.lat, destination.lng], {
-          icon,
-        })
-          .bindTooltip(destination.name, { permanent: true, direction: "top" })
-          .addTo(map);
-      } else {
-        destMarkerRef.current.setLatLng([destination.lat, destination.lng]);
-        destMarkerRef.current.setTooltipContent(destination.name);
+    try {
+      if (destination) {
+        const icon = createDestinationIcon();
+        if (!destMarkerRef.current) {
+          destMarkerRef.current = L.marker([destination.lat, destination.lng], {
+            icon,
+          })
+            .bindTooltip(destination.name, { permanent: true, direction: "top" })
+            .addTo(map);
+        } else {
+          destMarkerRef.current.setLatLng([destination.lat, destination.lng]);
+          destMarkerRef.current.setTooltipContent(destination.name);
+        }
+      } else if (destMarkerRef.current) {
+        destMarkerRef.current.remove();
+        destMarkerRef.current = null;
       }
-    } else if (destMarkerRef.current) {
-      destMarkerRef.current.remove();
-      destMarkerRef.current = null;
-    }
+    } catch {}
   }, [destination]);
 
   // Update route polylines and viewport
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const container = containerRef.current;
+    if (!map || !container || !container.isConnected) return;
 
-    const routeStr = JSON.stringify(route || []);
-    const routeChanged = routeStr !== lastRouteStrRef.current;
+    try {
+      const routeStr = JSON.stringify(route || []);
+      const routeChanged = routeStr !== lastRouteStrRef.current;
 
-    if (route && route.length > 0) {
-      if (!routeOutlineRef.current) {
-        routeOutlineRef.current = L.polyline(route, {
-          color: "white",
-          weight: 8,
-          opacity: 0.8,
-        }).addTo(map);
+      if (route && route.length > 0) {
+        if (!routeOutlineRef.current) {
+          routeOutlineRef.current = L.polyline(route, {
+            color: "white",
+            weight: 8,
+            opacity: 0.8,
+          }).addTo(map);
+        } else {
+          routeOutlineRef.current.setLatLngs(route);
+        }
+
+        if (!routePolylineRef.current) {
+          routePolylineRef.current = L.polyline(route, {
+            color: "#3b82f6",
+            weight: 5,
+            opacity: 0.9,
+          }).addTo(map);
+        } else {
+          routePolylineRef.current.setLatLngs(route);
+        }
+
+        if (routeChanged) {
+          lastRouteStrRef.current = routeStr;
+          const bounds = L.latLngBounds(route);
+          map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 });
+        }
       } else {
-        routeOutlineRef.current.setLatLngs(route);
+        lastRouteStrRef.current = "";
+        if (routeOutlineRef.current) {
+          routeOutlineRef.current.remove();
+          routeOutlineRef.current = null;
+        }
+        if (routePolylineRef.current) {
+          routePolylineRef.current.remove();
+          routePolylineRef.current = null;
+        }
+        if (position) {
+          map.setView([position.lat, position.lng]);
+        }
       }
-
-      if (!routePolylineRef.current) {
-        routePolylineRef.current = L.polyline(route, {
-          color: "#3b82f6",
-          weight: 5,
-          opacity: 0.9,
-        }).addTo(map);
-      } else {
-        routePolylineRef.current.setLatLngs(route);
-      }
-
-      if (routeChanged) {
-        lastRouteStrRef.current = routeStr;
-        const bounds = L.latLngBounds(route);
-        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 });
-      }
-    } else {
-      lastRouteStrRef.current = "";
-      if (routeOutlineRef.current) {
-        routeOutlineRef.current.remove();
-        routeOutlineRef.current = null;
-      }
-      if (routePolylineRef.current) {
-        routePolylineRef.current.remove();
-        routePolylineRef.current = null;
-      }
-      if (position) {
-        map.setView([position.lat, position.lng]);
-      }
-    }
+    } catch {}
   }, [route, position]);
 
   return (

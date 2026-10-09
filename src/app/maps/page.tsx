@@ -197,7 +197,7 @@ function MapsContent() {
             route={routeData?.coords || null}
           />
         )}
-        <LandmarkScanner video={videoEl} />
+        <LandmarkScanner video={videoEl} arActive={arActive} />
       </div>
 
       {/* DIVIDER */}
