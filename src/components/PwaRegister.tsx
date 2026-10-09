@@ -5,7 +5,22 @@ import { useEffect } from "react";
 export default function PwaRegister() {
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
-    if (process.env.NODE_ENV !== "production") return;
+    if (process.env.NODE_ENV !== "production") {
+      // In development, automatically unregister any stale service workers and clear dev caches
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const reg of registrations) {
+          reg.unregister();
+        }
+      });
+      if ("caches" in window) {
+        caches.keys().then((keys) => {
+          keys.forEach((k) => {
+            if (k.startsWith("arway-")) caches.delete(k);
+          });
+        });
+      }
+      return;
+    }
 
     const registerSW = async () => {
       try {

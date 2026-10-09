@@ -91,7 +91,7 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
 
-  // Exclude ignored endpoints
+  // Exclude ignored endpoints and Turbopack dev/HMR requests
   if (
     url.pathname.includes("/api/") ||
     url.hostname === "routing.openstreetmap.de" ||
@@ -99,6 +99,9 @@ self.addEventListener("fetch", (event) => {
     url.hostname === "huggingface.co" ||
     url.hostname === "hf.co" ||
     url.protocol === "chrome-extension:" ||
+    url.pathname.includes("turbopack") ||
+    url.pathname.includes("webpack-hmr") ||
+    url.pathname.includes(".hot-update.") ||
     req.headers.has("range")
   ) {
     return;
@@ -147,8 +150,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 2. /_next/static/* (hashed immutable Next.js assets) -> Cache-First
+  // 2. /_next/static/* (hashed immutable Next.js assets in production) -> Cache-First
   if (url.origin === self.location.origin && url.pathname.startsWith("/_next/static/")) {
+    // In development mode, do not intercept or cache Turbopack dev chunks
+    if (url.pathname.includes("/dev/") || url.pathname.includes("turbopack")) {
+      return;
+    }
+
     event.respondWith(
       (async () => {
         const staticCache = await caches.open(CACHE_STATIC);
