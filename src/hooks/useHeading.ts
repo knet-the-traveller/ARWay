@@ -51,7 +51,7 @@ export function useHeading() {
       let h = event.webkitCompassHeading;
       let beta = event.beta || 0;
       
-      const p = beta - 90;
+      const p = Math.max(-45, Math.min(60, 90 - beta));
       
       const alpha = 0.15;
       headingCosRef.current = headingCosRef.current * (1 - alpha) + Math.cos(h * Math.PI / 180) * alpha;
@@ -63,13 +63,19 @@ export function useHeading() {
       
       setHeading(smoothedHeading);
       setPitch(pitchRef.current);
-    } else if (event.alpha !== null) {
+    } else if (event.alpha !== null && event.alpha !== undefined) {
       // Android / Chrome
-      const alphaDeg = event.alpha;
-      const betaDeg = event.beta;
-      const gammaDeg = event.gamma;
+      const isAbsolute = event.type === 'deviceorientationabsolute' || event.absolute === true;
+      if (isAbsolute) {
+        hasAbsoluteRef.current = true;
+      } else if (hasAbsoluteRef.current && event.type === 'deviceorientation') {
+        // Absolute orientation is already providing true heading, skip relative fallback
+        return;
+      }
 
-      if (alphaDeg !== null && betaDeg !== null && gammaDeg !== null) {
+      const alphaDeg = event.alpha;
+      const betaDeg = event.beta !== null && event.beta !== undefined ? event.beta : 90;
+      const gammaDeg = event.gamma !== null && event.gamma !== undefined ? event.gamma : 0;
         const _alpha = alphaDeg * Math.PI / 180;
         const _beta = betaDeg * Math.PI / 180;
         const _gamma = gammaDeg * Math.PI / 180;
@@ -77,15 +83,10 @@ export function useHeading() {
         const vx = -Math.cos(_alpha) * Math.sin(_gamma) - Math.sin(_alpha) * Math.sin(_beta) * Math.cos(_gamma);
         const vy = -Math.sin(_alpha) * Math.sin(_gamma) + Math.cos(_alpha) * Math.sin(_beta) * Math.cos(_gamma);
 
-        let h = Math.atan2(vx, vy) * 180 / Math.PI;
-        if (vy < 0) {
-          h += 180;
-        } else if (vx < 0) {
-          h += 360;
-        }
-        h = (h + 360) % 360;
+        // Standard continuous heading calculation in [0, 360)
+        let h = (Math.atan2(vx, vy) * 180 / Math.PI + 360) % 360;
 
-        const p = betaDeg - 90;
+        const p = Math.max(-45, Math.min(60, 90 - betaDeg));
 
         const alphaFilter = 0.15;
         headingCosRef.current = headingCosRef.current * (1 - alphaFilter) + Math.cos(h * Math.PI / 180) * alphaFilter;
@@ -97,18 +98,18 @@ export function useHeading() {
         
         setHeading(smoothedHeading);
         setPitch(pitchRef.current);
-      }
     }
   }, []);
+
+  const hasAbsoluteRef = useRef(false);
 
   const startListening = () => {
     if (typeof window !== "undefined") {
       const w = window as any;
       if ('ondeviceorientationabsolute' in w) {
         w.addEventListener("deviceorientationabsolute", handleOrientation);
-      } else {
-        w.addEventListener("deviceorientation", handleOrientation);
       }
+      w.addEventListener("deviceorientation", handleOrientation);
     }
   };
 

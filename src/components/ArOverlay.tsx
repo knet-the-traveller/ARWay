@@ -232,39 +232,29 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
         if (w === 0 || h === 0) return;
 
         const cx = w / 2;
-        const cy = h * 0.45; // Horizon at 45% of height gives ample ground space
+        const cy = h / 2;
         const effectiveZoom = zoomRef.current || 1;
         const f = ((w / 2) / Math.tan((CAMERA_HFOV_DEG * Math.PI / 180) / 2)) * effectiveZoom;
 
-        const pitchDeg = pitchRef.current || 0;
-        // Clamp pitch to a stable visual horizon range:
-        // Protects against phone tilt pitching ground geometry into sky or below screen
-        const clampedPitchDeg = Math.max(-12, Math.min(22, pitchDeg));
-        const pitchRad = (clampedPitchDeg * Math.PI) / 180;
+        const pitchDeg = pitchRef.current;
+        const pitchRad = pitchDeg * Math.PI / 180;
         const cosPitch = Math.cos(pitchRad);
         const sinPitch = Math.sin(pitchRad);
 
         const projectPoint = (d: number, relAngleDeg: number, yGround: number) => {
-          let steeredRel = relAngleDeg;
-          if (isSteering) {
-            steeredRel = Math.max(-EDGE_CLAMP_DEG, Math.min(EDGE_CLAMP_DEG, steeredRel));
-          }
-
-          const relRad = (steeredRel * Math.PI) / 180;
+          const relRad = relAngleDeg * (Math.PI / 180);
           const x3d = d * Math.sin(relRad);
-          const z3d = Math.max(0.6, d * Math.cos(relRad));
+          const z3d = d * Math.cos(relRad);
           
-          const y3d = yGround; // camera elevation (1.4m)
-          
-          // Safe pitch rotation keeping ground ribbon firmly grounded
-          const yRot = Math.max(0.15, y3d * cosPitch - z3d * sinPitch);
-          const zRot = Math.max(0.6, y3d * sinPitch + z3d * cosPitch);
+          const y3d = yGround;
+          const yRot = y3d * cosPitch - z3d * sinPitch;
+          const zRot = y3d * sinPitch + z3d * cosPitch;
           
           return { x: x3d, y: yRot, z: zRot };
         };
 
-        const screenProject = (pt3d: { x: number; y: number; z: number }) => {
-          if (pt3d.z < 0.2) return null;
+        const screenProject = (pt3d: { x: number, y: number, z: number }) => {
+          if (pt3d.z < NEAR_CLIP_M) return null;
           return {
             sx: cx + (f * pt3d.x) / pt3d.z,
             sy: cy + (f * pt3d.y) / pt3d.z
@@ -272,7 +262,7 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
         };
 
         const time = performance.now() / 1000;
-        ctx.globalAlpha = isWeakGps ? 0.85 : 1.0;
+        ctx.globalAlpha = isWeakGps ? 0.6 : 1.0;
 
         // Collect ribbon quads
         for (let i = 0; i < path.length - 1; i++) {
@@ -283,6 +273,9 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           const d1 = haversineDistanceM(currentPos, p1);
           const d2 = haversineDistanceM(currentPos, p2);
           
+          // Skip segments far beyond the lookahead horizon
+          if (d1 > LOOKAHEAD_M && d2 > LOOKAHEAD_M) continue;
+
           const left1 = offsetLatLng(p1, brng - 90, LINE_HALF_WIDTH_M);
           const right1 = offsetLatLng(p1, brng + 90, LINE_HALF_WIDTH_M);
           const left2 = offsetLatLng(p2, brng - 90, LINE_HALF_WIDTH_M);
@@ -296,13 +289,24 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           ];
           
           const pts3d = pts.map(p => projectPoint(p.d, p.rel, CAMERA_HEIGHT_M));
-          const spts = pts3d.map(screenProject);
+          
+          // Skip segment if all corners are behind camera near plane
+          if (pts3d.every(p => p.z < NEAR_CLIP_M)) continue;
+
+          // Smoothly clamp near-camera corners to NEAR_CLIP_M so ground ribbon reaches screen base
+          const safePts3d = pts3d.map(p => ({
+            x: p.x,
+            y: p.y,
+            z: Math.max(NEAR_CLIP_M, p.z)
+          }));
+
+          const spts = safePts3d.map(screenProject);
           if (spts.some(sp => sp === null)) continue;
           
           const alphaFade = Math.max(0, 1 - (d1 / LOOKAHEAD_M));
           
-          ctx.fillStyle = `rgba(37, 99, 235, ${isSteering ? 0.35 * alphaFade : 0.55 * alphaFade})`;
-          ctx.strokeStyle = `rgba(255, 255, 255, ${isSteering ? 0.75 * alphaFade : 0.95 * alphaFade})`;
+          ctx.fillStyle = `rgba(37, 99, 235, ${0.55 * alphaFade})`;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${0.95 * alphaFade})`;
           ctx.lineWidth = 2.5 * window.devicePixelRatio;
           
           ctx.beginPath();
@@ -315,9 +319,7 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           
           // Outlines
           ctx.beginPath();
-          if (isSteering) ctx.setLineDash([10 * window.devicePixelRatio, 10 * window.devicePixelRatio]);
-          else ctx.setLineDash([]);
-          
+          ctx.setLineDash([]);
           ctx.moveTo(spts[0]!.sx, spts[0]!.sy);
           ctx.lineTo(spts[3]!.sx, spts[3]!.sy);
           ctx.stroke();
@@ -325,7 +327,6 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           ctx.moveTo(spts[1]!.sx, spts[1]!.sy);
           ctx.lineTo(spts[2]!.sx, spts[2]!.sy);
           ctx.stroke();
-          ctx.setLineDash([]);
         }
 
         // Chevrons
