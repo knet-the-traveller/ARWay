@@ -24,6 +24,16 @@ interface PlaceSearchProps {
   className?: string;
 }
 
+const COMMON_NEARBY_POIS: PlaceResult[] = [
+  { id: "poi-mcdo-intramuros", name: "McDonald's Intramuros", address: "General Luna St, Intramuros, Manila", lat: 14.5898, lng: 120.9749, tag: "Fast Food" },
+  { id: "poi-mcdo-binondo", name: "McDonald's Binondo", address: "Plaza Lorenzo Ruiz, Binondo, Manila", lat: 14.5997, lng: 120.9744, tag: "Fast Food" },
+  { id: "poi-jollibee-plazalorenzo", name: "Jollibee Plaza Lorenzo Ruiz", address: "Quintin Paredes St, Binondo, Manila", lat: 14.5993, lng: 120.9748, tag: "Fast Food" },
+  { id: "poi-jollibee-intramuros", name: "Jollibee Intramuros", address: "Muralla St, Intramuros, Manila", lat: 14.5925, lng: 120.9782, tag: "Fast Food" },
+  { id: "poi-7eleven-general-luna", name: "7-Eleven General Luna", address: "General Luna St, Intramuros, Manila", lat: 14.5888, lng: 120.9752, tag: "Store" },
+  { id: "poi-starbucks-intramuros", name: "Starbucks Puerta de Isabel II", address: "Muralla St, Intramuros, Manila", lat: 14.5946, lng: 120.9765, tag: "Cafe" },
+  { id: "poi-ayala-mcdo", name: "McDonald's Greenbelt", address: "Ayala Center, Makati, Metro Manila", lat: 14.5518, lng: 121.0205, tag: "Fast Food" }
+];
+
 export default function PlaceSearch({
   userLocation,
   userPosition,
@@ -66,9 +76,18 @@ export default function PlaceSearch({
 
     setLoading(true);
 
-    // 1. Local search from sceneries and shops (instant & 100% offline ready)
+    // 1. Local search from sceneries, shops, and common offline POIs (instant & 100% offline ready)
     const lower = text.toLowerCase();
     const localMatches: PlaceResult[] = [];
+
+    // Check offline POIs (McDonald's, Jollibee, etc.)
+    for (const p of COMMON_NEARBY_POIS) {
+      if (p.name.toLowerCase().includes(lower) || p.address.toLowerCase().includes(lower)) {
+        const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat: p.lat, lng: p.lng }) : undefined;
+        localMatches.push({ ...p, distanceM: dist });
+      }
+    }
+
     for (const s of sceneries) {
       if (s.name.toLowerCase().includes(lower) || s.address.toLowerCase().includes(lower)) {
         const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat: s.lat, lng: s.lng }) : undefined;
@@ -99,47 +118,87 @@ export default function PlaceSearch({
     }
 
     try {
-      // 2. Photon Geocoder (Fast OpenStreetMap Search by Komoot, 0 keys needed)
-      let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&limit=6`;
-      if (effectiveUserPos) {
-        url += `&lat=${effectiveUserPos.lat}&lon=${effectiveUserPos.lng}`;
-      }
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3500);
-      const res = await fetch(url, { signal: controller.signal }).catch(() => null);
-      clearTimeout(timeout);
-
       const onlineMatches: PlaceResult[] = [];
 
-      if (res && res.ok) {
-        const data = await res.json();
-        if (data && data.features && data.features.length > 0) {
-          data.features.forEach((f: any, idx: number) => {
-            const props = f.properties || {};
-            const coords = f.geometry?.coordinates || [0, 0];
-            const lng = coords[0];
-            const lat = coords[1];
+      // 2. Photon Geocoder (Fast OpenStreetMap Search by Komoot)
+      try {
+        let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&limit=6`;
+        if (effectiveUserPos) {
+          url += `&lat=${effectiveUserPos.lat}&lon=${effectiveUserPos.lng}`;
+        }
 
-            const name = props.name || props.street || text;
-            const addressParts = [
-              props.street ? `${props.housenumber || ""} ${props.street}`.trim() : null,
-              props.city || props.district || props.county,
-              props.country
-            ].filter(Boolean);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2500);
+        const res = await fetch(url, { signal: controller.signal }).catch(() => null);
+        clearTimeout(timeout);
 
-            const address = addressParts.join(", ") || props.country || "Location";
-            const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat, lng }) : undefined;
+        if (res && res.ok) {
+          const data = await res.json();
+          if (data && data.features && data.features.length > 0) {
+            data.features.forEach((f: any, idx: number) => {
+              const props = f.properties || {};
+              const coords = f.geometry?.coordinates || [0, 0];
+              const lng = coords[0];
+              const lat = coords[1];
 
-            onlineMatches.push({
-              id: `photon-${idx}-${lat}-${lng}`,
-              name,
-              address,
-              lat,
-              lng,
-              distanceM: dist
+              const name = props.name || props.street || text;
+              const addressParts = [
+                props.street ? `${props.housenumber || ""} ${props.street}`.trim() : null,
+                props.city || props.district || props.county,
+                props.country
+              ].filter(Boolean);
+
+              const address = addressParts.join(", ") || props.country || "Location";
+              const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat, lng }) : undefined;
+
+              onlineMatches.push({
+                id: `photon-${idx}-${lat}-${lng}`,
+                name,
+                address,
+                lat,
+                lng,
+                distanceM: dist
+              });
             });
-          });
+          }
+        }
+      } catch (photonErr) {
+        console.warn("Photon search note:", photonErr);
+      }
+
+      // 3. Nominatim Fallback if Photon returned 0 results online
+      if (onlineMatches.length === 0 && navigator.onLine) {
+        try {
+          const nomUrl = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(text)}&countrycodes=ph&limit=6&accept-language=en`;
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 2500);
+          const res = await fetch(nomUrl, { signal: controller.signal }).catch(() => null);
+          clearTimeout(timeout);
+
+          if (res && res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              data.forEach((item: any, idx: number) => {
+                const parts = item.display_name.split(",");
+                const name = parts[0].trim();
+                const address = parts.slice(1, 4).join(",").trim() || "Philippines";
+                const lat = parseFloat(item.lat);
+                const lng = parseFloat(item.lon);
+                const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat, lng }) : undefined;
+
+                onlineMatches.push({
+                  id: `nom-${idx}-${lat}-${lng}`,
+                  name,
+                  address,
+                  lat,
+                  lng,
+                  distanceM: dist
+                });
+              });
+            }
+          }
+        } catch (nomErr) {
+          console.warn("Nominatim fallback note:", nomErr);
         }
       }
 
