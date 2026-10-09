@@ -185,21 +185,8 @@ function MapsContent() {
 
   return (
     <main className="flex flex-col w-full flex-1 min-h-0 bg-black text-white overflow-hidden relative">
-      {/* STATUS BAR */}
-      <div className="absolute top-0 left-0 w-full z-50 pointer-events-none p-2 flex justify-center">
-        <div className="bg-black/60 text-white text-xs px-3 py-1 rounded-full shadow-md backdrop-blur-sm">
-          {error ? (
-            <span className="text-red-400">GPS Error: {error}</span>
-          ) : accuracy ? (
-            <span>GPS ±{Math.round(accuracy)} m</span>
-          ) : (
-            <span>Locating...</span>
-          )}
-        </div>
-      </div>
-
       {simulatedWalk && (
-        <div className="absolute top-10 left-0 w-full z-50 pointer-events-none flex justify-center">
+        <div className="absolute top-12 left-0 w-full z-50 pointer-events-none flex justify-center">
           <div className="bg-red-600 text-white text-xs px-2 py-0.5 font-bold tracking-widest rounded shadow-md animate-pulse">SIMULATED</div>
         </div>
       )}
@@ -226,6 +213,19 @@ function MapsContent() {
 
       {/* BOTTOM: MAP */}
       <div className="w-full h-[45%] relative">
+        {/* GPS STATUS PILL (Floats cleanly over map, non-obtrusive) */}
+        <div className="absolute top-2.5 left-2.5 z-[400]">
+          <div 
+            className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-medium shadow-md border border-white/10 flex items-center gap-1.5 pointer-events-auto select-none"
+            title={error ? `GPS Error: ${error} — Using Intramuros demo location.` : accuracy ? `GPS Accuracy: ±${Math.round(accuracy)}m` : "Acquiring GPS fix..."}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${error ? "bg-amber-400" : accuracy ? "bg-emerald-400" : "bg-neutral-400 animate-pulse"}`} />
+            <span className="text-neutral-300">
+              {error ? "Demo GPS (Intramuros)" : accuracy ? `GPS ±${Math.round(accuracy)}m` : "Locating..."}
+            </span>
+          </div>
+        </div>
+
         <MapView
           position={effectivePosition}
           destination={destination}
