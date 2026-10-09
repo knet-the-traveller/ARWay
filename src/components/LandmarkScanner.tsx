@@ -245,26 +245,40 @@ export default function LandmarkScanner({ video, arActive }: LandmarkScannerProp
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-30 pointer-events-none">
         
         {/* Left Column */}
-        <div className="flex flex-col gap-2 items-start max-w-[45%]">
-          {/* Offline Status / Prepare Button */}
+        <div className="flex flex-col gap-2 items-start max-w-[65%]">
+          {/* Offline Status / Download Pack Button */}
           <Link
             href="/offline-setup"
-            className={`pointer-events-auto backdrop-blur-md rounded-full px-2.5 py-1.5 flex items-center shadow-md border transition-all active:scale-95 ${
-              isOfflineReady
-                ? "bg-black/70 border-emerald-500/30 text-white"
-                : "bg-blue-600/90 border-blue-400/30 text-white animate-pulse"
+            className={`pointer-events-auto backdrop-blur-md rounded-full px-3 py-1.5 flex items-center shadow-md border transition-all active:scale-95 ${
+              !isOfflineReady
+                ? "bg-neutral-900/95 border-amber-500/60 text-amber-200 shadow-amber-950/30"
+                : isOnline
+                  ? "bg-black/75 border-emerald-500/40 text-emerald-300 shadow-emerald-950/20"
+                  : "bg-sky-950/90 border-sky-400/50 text-sky-200 shadow-sky-950/30"
             }`}
-            title="Offline Maps & AI Setup"
+            title={
+              !isOfflineReady
+                ? "Download map tiles & AI landmark model for offline travel"
+                : isOnline
+                  ? "Offline maps and on-device AI are saved on this phone"
+                  : "Running 100% on-device with zero internet data"
+            }
           >
-            {isOfflineReady ? (
-              <span className={`w-2 h-2 rounded-full mr-1.5 shrink-0 ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-sky-400"}`} />
-            ) : (
-              <svg className="w-3.5 h-3.5 mr-1.5 shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            {!isOfflineReady ? (
+              <svg className="w-3.5 h-3.5 mr-1.5 shrink-0 text-amber-300 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
+            ) : isOnline ? (
+              <span className="w-2 h-2 rounded-full mr-2 shrink-0 bg-emerald-400 animate-pulse shadow-[0_0_6px_#10b981]" />
+            ) : (
+              <span className="text-xs mr-1.5 shrink-0">✈️</span>
             )}
             <span className="text-[11px] font-semibold whitespace-nowrap">
-              {isOfflineReady ? (isOnline ? "Offline Ready" : "Airplane Mode") : "Prepare Offline"}
+              {!isOfflineReady
+                ? "Download Offline Pack"
+                : isOnline
+                  ? "Offline Pack Ready"
+                  : "On-Device Mode (Offline)"}
             </span>
           </Link>
 

@@ -154,9 +154,42 @@ function MapsContent() {
     }
   }, [simulatedWalk, holdingWalk]);
 
+  const [splitRatio, setSplitRatio] = useState<number>(50); // percentage height of camera (25% to 75%)
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const relativeY = moveEvent.clientY - rect.top;
+      const newRatio = (relativeY / rect.height) * 100;
+      // Clamp strictly between 25% and 75%
+      const clampedRatio = Math.min(75, Math.max(25, newRatio));
+      setSplitRatio(clampedRatio);
+    };
+
+    const handlePointerUp = () => {
+      setIsDragging(false);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.dispatchEvent(new Event("resize"));
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
   const handleStartAr = async () => {
     await requestPermission();
     setArActive(true);
+    // When activating AR, automatically expand camera if it's currently small
+    if (splitRatio < 60) {
+      setSplitRatio(70);
+    }
   };
 
   const handleRecenter = () => {
@@ -184,15 +217,21 @@ function MapsContent() {
   };
 
   return (
-    <main className="flex flex-col w-full flex-1 min-h-0 bg-black text-white overflow-hidden relative">
+    <main 
+      ref={containerRef}
+      className={`flex flex-col w-full flex-1 min-h-0 bg-black text-white overflow-hidden relative ${isDragging ? "select-none" : ""}`}
+    >
       {simulatedWalk && (
         <div className="absolute top-12 left-0 w-full z-50 pointer-events-none flex justify-center">
           <div className="bg-red-600 text-white text-xs px-2 py-0.5 font-bold tracking-widest rounded shadow-md animate-pulse">SIMULATED</div>
         </div>
       )}
 
-      {/* TOP: CAMERA */}
-      <div className="w-full h-[55%] relative">
+      {/* TOP: CAMERA (Resizable: 25% to 75%) */}
+      <div 
+        style={{ height: `${splitRatio}%` }}
+        className={`w-full relative ${isDragging ? "" : "transition-[height] duration-200 ease-out"}`}
+      >
         <CameraView onVideoReady={setVideoEl} />
         {arActive && (
           <ArOverlay
@@ -208,11 +247,23 @@ function MapsContent() {
         <LandmarkScanner video={videoEl} arActive={arActive} />
       </div>
 
-      {/* DIVIDER */}
-      <div className="w-full h-[1px] bg-gray-800 z-10" />
+      {/* DRAGGABLE DIVIDER (Drag up/down: 25% to 75% split) */}
+      <div 
+        onPointerDown={handlePointerDown}
+        className="w-full h-6 -my-3 z-30 cursor-row-resize flex items-center justify-center touch-none select-none group relative"
+        title="Drag up or down to resize Camera and Map"
+      >
+        <div className="w-full h-[1px] bg-neutral-800 group-hover:bg-neutral-600 transition-colors" />
+        <div className="absolute w-12 h-1.5 rounded-full bg-neutral-400/80 group-hover:bg-white group-active:bg-blue-400 group-active:scale-110 shadow-md transition-all flex items-center justify-center">
+          <div className="w-4 h-0.5 rounded-full bg-white/50" />
+        </div>
+      </div>
 
-      {/* BOTTOM: MAP */}
-      <div className="w-full h-[45%] relative">
+      {/* BOTTOM: MAP (Resizable: 25% to 75%) */}
+      <div 
+        style={{ height: `${100 - splitRatio}%` }}
+        className={`w-full relative ${isDragging ? "" : "transition-[height] duration-200 ease-out"}`}
+      >
         {/* GPS STATUS PILL (Floats cleanly over map, non-obtrusive) */}
         <div className="absolute top-2.5 left-2.5 z-[400]">
           <div 
