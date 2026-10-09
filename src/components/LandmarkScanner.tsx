@@ -12,9 +12,10 @@ import { LockIcon, BugIcon, CloseIcon } from "./icons";
 
 interface LandmarkScannerProps {
   video: HTMLVideoElement | null;
+  arActive?: boolean;
 }
 
-export default function LandmarkScanner({ video }: LandmarkScannerProps) {
+export default function LandmarkScanner({ video, arActive }: LandmarkScannerProps) {
   const router = useRouter();
   const [isScanning, setIsScanning] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<"idle" | "model" | "references" | "done" | "error">("idle");
@@ -150,31 +151,123 @@ export default function LandmarkScanner({ video }: LandmarkScannerProps) {
     }
   };
 
-  if (!isScanning && loadingPhase !== "error") {
+  const renderCameraButton = () => {
+    let ringColor = "transparent";
+    let pulse = false;
+    let iconOpacity = 1;
+    let progress = 0;
+    
+    if (loadingPhase === "model") {
+      ringColor = "#3b82f6";
+      iconOpacity = 0.5;
+      progress = modelProgress;
+    } else if (loadingPhase === "references") {
+      ringColor = "#3b82f6";
+      iconOpacity = 0.5;
+      progress = refTotal ? (refDone / refTotal) * 100 : 0;
+    } else if (loadingPhase === "error") {
+      ringColor = "#ef4444";
+    } else if (isScanning) {
+      ringColor = "#3b82f6";
+      pulse = true;
+    }
+
+    const handleClick = () => {
+      if (isScanning) {
+        stopScanning();
+      } else {
+        startScanning();
+      }
+    };
+
     return (
-      <div className="absolute inset-0 pointer-events-none flex flex-col justify-end items-center pb-6 z-20">
-        <button 
-          onClick={startScanning}
-          className="pointer-events-auto bg-[#3b82f6] text-white rounded-full h-[44px] px-8 font-semibold text-[15px] shadow-lg active:bg-blue-600 transition-colors"
+      <button 
+        onClick={handleClick}
+        aria-label={isScanning ? "Stop scanning" : "Scan landmarks"}
+        className="relative w-[44px] h-[44px] rounded-full bg-black/55 backdrop-blur-sm flex items-center justify-center text-white pointer-events-auto active:bg-black/80 shadow-sm flex-shrink-0 z-40"
+      >
+        {pulse && (
+          <div className="absolute inset-0 rounded-full border-2 border-blue-500 animate-ping opacity-75" />
+        )}
+        {(loadingPhase === "model" || loadingPhase === "references") && (
+          <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 44 44">
+            <circle cx="22" cy="22" r="21" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2" />
+            <circle cx="22" cy="22" r="21" fill="none" stroke={ringColor} strokeWidth="2" 
+              strokeDasharray={132} strokeDashoffset={132 - (132 * progress) / 100} 
+              className="transition-all duration-300"
+            />
+          </svg>
+        )}
+        {loadingPhase === "error" && (
+          <div className="absolute inset-0 rounded-full border-2 border-red-500" />
+        )}
+        {isScanning && loadingPhase === "done" && (
+          <div className="absolute inset-0 rounded-full border-2 border-blue-500" />
+        )}
+        <svg 
+          className="w-6 h-6" 
+          style={{ opacity: iconOpacity }} 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24" 
+          strokeWidth="2" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
         >
-          Scan landmarks
-        </button>
-      </div>
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+          <circle cx="12" cy="13" r="4" />
+        </svg>
+      </button>
     );
-  }
+  };
+
+  const bottomOffset = (arActive !== false) ? "84px" : "12px";
 
   return (
     <div className="absolute inset-0 pointer-events-none z-20 flex flex-col">
       {/* Top Section */}
-      <div className="absolute top-4 left-4 right-4 flex flex-col gap-2 z-30 pointer-events-none">
-        <div className="flex justify-between items-start">
+      <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-30 pointer-events-none">
+        
+        {/* Left Column */}
+        <div className="flex flex-col gap-2 items-start w-[30%]">
           {/* Privacy Badge */}
-          {isScanning ? (
+          {isScanning && (
             <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center shadow-sm">
               <LockIcon className="w-3.5 h-3.5 text-green-400 mr-2 flex-shrink-0" />
               <span className="text-white text-[11px] font-medium whitespace-nowrap">On-device AI</span>
             </div>
-          ) : <div />}
+          )}
+
+          {/* Neutral State / Status Pill */}
+          {isScanning && isNeutral && !topMatch && loadingPhase === "done" && (
+            <div className="bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 flex items-center shadow-md transition-opacity">
+              <span className="text-white text-[13px] font-medium">
+                {debugInfo && debugInfo.top3[0]?.score < MIN_SCORE ? "Not sure" : "Looking for a landmark..."}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Center Column: Loading / Error Cards */}
+        <div className="flex flex-col items-center w-[40%]">
+          {(loadingPhase === "model" || loadingPhase === "references") && (
+            <div className="bg-[#1c1c1e]/90 backdrop-blur-md p-3 rounded-xl shadow-xl w-full max-w-[280px] pointer-events-auto text-center">
+              <h3 className="text-white font-semibold text-[13px] mb-1">Loading on-device AI...</h3>
+              <p className="text-gray-400 text-[11px]">Preparing landmarks ({refDone}/{refTotal})</p>
+            </div>
+          )}
+          {loadingPhase === "error" && (
+            <div className="bg-[#1c1c1e]/90 backdrop-blur-md p-3 rounded-xl shadow-xl w-full max-w-[280px] pointer-events-auto flex flex-col items-center">
+              <h3 className="text-red-400 font-semibold text-[13px] mb-1">Failed to load</h3>
+              <p className="text-gray-400 text-[11px] text-center mb-2">{loadError}</p>
+              <button onClick={startScanning} className="bg-gray-700 text-white rounded-lg px-4 py-1.5 text-[12px] font-semibold active:bg-gray-600">Retry</button>
+            </div>
+          )}
+        </div>
+
+        {/* Right Column */}
+        <div className="flex flex-col gap-2 items-end w-[30%]">
+          {renderCameraButton()}
 
           {/* Debug Toggle */}
           {isScanning && loadingPhase === "done" && (
@@ -186,53 +279,22 @@ export default function LandmarkScanner({ video }: LandmarkScannerProps) {
             </button>
           )}
         </div>
-
-        {/* Neutral State / Status Pill */}
-        {isScanning && isNeutral && !topMatch && loadingPhase === "done" && (
-          <div className="self-start bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 flex items-center shadow-md transition-opacity">
-            <span className="text-white text-[13px] font-medium">
-              {debugInfo && debugInfo.top3[0]?.score < MIN_SCORE ? "Not sure" : "Looking for a landmark..."}
-            </span>
-          </div>
-        )}
       </div>
 
-      {/* Bottom Section */}
-      <div className="mt-auto p-4 flex flex-col items-center gap-4 w-full z-30 pointer-events-none">
-        
-        {/* Loading State */}
-        {(loadingPhase === "model" || loadingPhase === "references") && (
-          <div className="bg-[#1c1c1e]/90 backdrop-blur-md p-4 rounded-xl shadow-xl w-[280px] pointer-events-auto text-center">
-            <h3 className="text-white font-semibold text-[15px] mb-2">Loading on-device AI...</h3>
-            {loadingPhase === "model" ? (
-              <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 transition-all" style={{ width: `${modelProgress}%` }} />
-              </div>
-            ) : (
-              <p className="text-gray-400 text-[13px]">Preparing landmarks ({refDone}/{refTotal})</p>
-            )}
-          </div>
-        )}
-
-        {/* Error State */}
-        {loadingPhase === "error" && (
-          <div className="bg-[#1c1c1e]/90 backdrop-blur-md p-4 rounded-xl shadow-xl w-[280px] pointer-events-auto flex flex-col items-center">
-            <h3 className="text-red-400 font-semibold text-[15px] mb-2">Failed to load</h3>
-            <p className="text-gray-400 text-[13px] text-center mb-4">{loadError}</p>
-            <button onClick={startScanning} className="bg-gray-700 text-white rounded-lg px-6 py-2 text-[14px] font-semibold active:bg-gray-600">Retry</button>
-          </div>
-        )}
-
-        {/* Debug Panel (Bottom Area) */}
-        {showDebug && debugInfo && isScanning && loadingPhase === "done" && (
-          topMatch ? (
+      {/* Debug Panel */}
+      {showDebug && debugInfo && isScanning && loadingPhase === "done" && (
+        <div 
+          className="absolute left-4 right-4 z-30 pointer-events-none flex flex-col items-center"
+          style={{ bottom: `calc(${bottomOffset} + ${topMatch ? '70px' : '0px'})` }}
+        >
+          {topMatch ? (
             // Compact line if result card is showing
-            <div className="w-full bg-black/80 backdrop-blur-md rounded-lg p-2 text-[11px] text-green-400 font-mono shadow-lg pointer-events-auto truncate text-center">
+            <div className="w-full max-w-[340px] bg-black/80 backdrop-blur-md rounded-lg p-2 text-[11px] text-green-400 font-mono shadow-lg pointer-events-auto truncate text-center mb-2">
               {deviceUsed} | {Math.round(debugInfo.ms)}ms | {debugInfo.top3[0]?.name} ({(debugInfo.top3[0]?.score || 0).toFixed(3)})
             </div>
           ) : (
-            // Full panel otherwise
-            <div className="w-full max-h-[40vh] overflow-y-auto bg-black/80 backdrop-blur-md rounded-xl p-3 text-[11px] text-green-400 font-mono shadow-lg pointer-events-auto">
+            // Full panel otherwise (ensuring it doesn't cover bottom-center 120x110px)
+            <div className="w-full max-h-[40vh] overflow-y-auto bg-black/80 backdrop-blur-md rounded-xl p-3 text-[11px] text-green-400 font-mono shadow-lg pointer-events-auto max-w-[340px]">
               <p className="text-white mb-1">Device: {deviceUsed}</p>
               <p className="mb-2">Time: {Math.round(debugInfo.ms)}ms</p>
               <p className="text-gray-400 mb-1 border-b border-gray-700 pb-1">Top 3 matches:</p>
@@ -245,12 +307,17 @@ export default function LandmarkScanner({ video }: LandmarkScannerProps) {
               <p className="mt-2 text-yellow-400">Margin: {debugInfo.margin.toFixed(3)}</p>
               <p className="text-gray-500 mt-1">Req: sc&gt;={MIN_SCORE} mg&gt;={MIN_MARGIN}</p>
             </div>
-          )
-        )}
+          )}
+        </div>
+      )}
 
-        {/* Match Result Card */}
-        {topMatch && (
-          <div className="bg-[#1c1c1e]/90 backdrop-blur-md p-3 rounded-2xl shadow-xl w-full max-w-[340px] pointer-events-auto relative animate-in slide-in-from-bottom-4 duration-300">
+      {/* Match Result Card */}
+      {topMatch && (
+        <div 
+          className="absolute left-4 right-4 z-30 pointer-events-auto flex justify-center"
+          style={{ bottom: bottomOffset }}
+        >
+          <div className="bg-[#1c1c1e]/90 backdrop-blur-md p-3 rounded-2xl shadow-xl w-full max-w-[340px] relative animate-in slide-in-from-bottom-4 duration-300">
             <button 
               onClick={() => {
                 setDismissedMatchId(topMatch.placeId);
@@ -276,18 +343,8 @@ export default function LandmarkScanner({ video }: LandmarkScannerProps) {
               Navigate here
             </button>
           </div>
-        )}
-
-        {/* Stop Scanning Button */}
-        {isScanning && loadingPhase === "done" && (
-          <button 
-            onClick={stopScanning}
-            className="pointer-events-auto bg-gray-800/80 backdrop-blur-sm text-white rounded-full h-[44px] px-6 font-medium text-[14px] shadow-lg border border-gray-700 active:bg-gray-700 transition-colors mb-2"
-          >
-            Stop scanning
-          </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
