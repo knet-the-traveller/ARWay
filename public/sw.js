@@ -84,6 +84,17 @@ self.addEventListener("message", (event) => {
   }
 });
 
+// Helper: strip Vary header so Cache API matches across navigation and fetch modes
+function cleanResponseWithoutVary(res) {
+  const newHeaders = new Headers(res.headers);
+  newHeaders.delete("vary");
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: newHeaders
+  });
+}
+
 // Fetch Interception
 self.addEventListener("fetch", (event) => {
   const req = event.request;
@@ -112,37 +123,47 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         const pagesCache = await caches.open(CACHE_PAGES);
+        const matchOpts = { ignoreSearch: true, ignoreVary: true };
+        const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
 
-        // Network-first with a 4-second timeout
-        try {
-          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
-          const fetchPromise = fetch(req).then((res) => {
-            if (res && res.ok) {
-              pagesCache.put(req, res.clone());
+        // If online, race network with an 800ms timeout
+        if (!isOffline) {
+          try {
+            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 800));
+            const fetchPromise = fetch(req).then((res) => {
+              if (res && res.ok) {
+                const cleaned = cleanResponseWithoutVary(res.clone());
+                pagesCache.put(req, cleaned);
+                pagesCache.put(url.pathname, cleanResponseWithoutVary(res.clone()));
+              }
+              return res;
+            }).catch(() => null);
+
+            const networkRes = await Promise.race([fetchPromise, timeoutPromise]);
+            if (networkRes && networkRes.ok) {
+              return networkRes;
             }
-            return res;
-          }).catch(() => null);
+          } catch (e) {}
+        }
 
-          const networkRes = await Promise.race([fetchPromise, timeoutPromise]);
-          if (networkRes && networkRes.ok) {
-            return networkRes;
-          }
-        } catch (e) {}
-
-        // Fallback: match URL ignoring search params
-        const cachedMatch = await pagesCache.match(req, { ignoreSearch: true });
+        // Offline or timed out: match cache with ignoreVary: true and ignoreSearch: true
+        const cachedMatch = await pagesCache.match(req, matchOpts);
         if (cachedMatch) return cachedMatch;
 
+        const pathname = url.pathname;
+        const pathMatch = await pagesCache.match(pathname, matchOpts);
+        if (pathMatch) return pathMatch;
+
         // Fallback: cached "/maps"
-        const mapsMatch = await pagesCache.match("/maps", { ignoreSearch: true });
+        const mapsMatch = await pagesCache.match("/maps", matchOpts);
         if (mapsMatch) return mapsMatch;
 
         // Fallback: root "/"
-        const rootMatch = await pagesCache.match("/", { ignoreSearch: true });
+        const rootMatch = await pagesCache.match("/", matchOpts);
         if (rootMatch) return rootMatch;
 
         // Fallback: /offline.html
-        const offlineMatch = await pagesCache.match("/offline.html");
+        const offlineMatch = await pagesCache.match("/offline.html", matchOpts);
         if (offlineMatch) return offlineMatch;
 
         // Guaranteed inline 200 HTML recovery page (never 503 so Chrome never shows dinosaur)
@@ -190,18 +211,45 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         const pagesCache = await caches.open(CACHE_PAGES);
-        try {
-          const res = await fetch(req);
-          if (res && res.ok) {
-            pagesCache.put(req, res.clone());
-            return res;
-          }
-        } catch (e) {}
+        const matchOpts = { ignoreSearch: true, ignoreVary: true };
+        const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
 
-        const cached = await pagesCache.match(req, { ignoreSearch: true });
+        // If online, race network with 800ms timeout
+        if (!isOffline) {
+          try {
+            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 800));
+            const fetchPromise = fetch(req).then((res) => {
+              if (res && res.ok) {
+                const cleaned = cleanResponseWithoutVary(res.clone());
+                pagesCache.put(req, cleaned);
+                pagesCache.put(`${url.pathname}?_rsc=offline`, cleanResponseWithoutVary(res.clone()));
+              }
+              return res;
+            }).catch(() => null);
+
+            const networkRes = await Promise.race([fetchPromise, timeoutPromise]);
+            if (networkRes && networkRes.ok) return networkRes;
+          } catch (e) {}
+        }
+
+        // 1. Try exact request in cache
+        const cached = await pagesCache.match(req, matchOpts);
         if (cached) return cached;
 
-        // If neither, let request fail so Next.js falls back to full-page navigation
+        // 2. Try pre-warmed RSC payload for this route
+        const rscOffline = await pagesCache.match(`${url.pathname}?_rsc=offline`, matchOpts);
+        if (rscOffline) return rscOffline;
+
+        // 3. Try route pathname
+        const pathMatch = await pagesCache.match(url.pathname, matchOpts);
+        if (pathMatch) {
+          const ct = pathMatch.headers.get("Content-Type") || "";
+          if (ct.includes("text/x-component")) {
+            return pathMatch;
+          }
+        }
+
+        // If missing, let request fail so Next.js falls back to full-page navigation
         return new Response("RSC fetch failed", { status: 503 });
       })()
     );
@@ -211,6 +259,7 @@ self.addEventListener("fetch", (event) => {
   // 4. Same-origin media, images, fonts, icons -> Cache-First
   const isMedia = url.origin === self.location.origin && (
     url.pathname.startsWith("/sceneries/") ||
+    url.pathname.startsWith("/shop/") ||
     url.pathname.startsWith("/shops/") ||
     url.pathname.startsWith("/icons/") ||
     req.destination === "image" ||

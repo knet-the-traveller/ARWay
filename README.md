@@ -20,14 +20,14 @@ Built for AppBuildersPH Hackathon 2026 · Local AI
 
 | Name | Role |
 |---|---|
-| Mark Kenneth Galario | Team Lead, Backend |
+| Mark Kenneth Galario | Team Lead, Backend, AI/ML |
 | Kirby Caranyagan | AI/ML, Backend |
 | Abegail Sonsona | UI/UX, Frontend, Marketing |
 | Mark Andrew Cruz | UI/UX, Frontend, Storyteller |
 
 - **GitHub repository:** https://github.com/knet-the-traveller/ARWay
 - **Live demo (optional):** https://ar-way.vercel.app
-- **Hardware tested on:** Android phone, Android 10, Chrome 154 (mobile), 8 CPU cores, 8 GB RAM, WebGPU available. Phone model: POCO X8 Pro. Laptop used for development and the demo: ASUS V16. Not yet tested on iPhone/Safari. The UI is laid out for a 375x667 viewport.
+- **Hardware tested on:** Android phone, Android 10, Chrome 154 (mobile), 8 CPU cores, 8 GB RAM, WebGPU available. Phone model: POCO X8 Pro. SAMSUNG A54 5G. Laptop used for development and the demo: ASUS V16. Not yet tested on iPhone/Safari. The UI is laid out for a 375x667 viewport.
 
 ## What it does
 - Camera on top and map on the bottom; resizable camera/map split screen
@@ -44,23 +44,13 @@ Zero-shot nearest-neighbour matching against a small set of reference photos (li
 
 ```mermaid
 flowchart TD
-  frame[Camera Frame] --> resize[Downscale to 224x224 (Local)]
-  resize --> clip[CLIP Image Encoder (Transformers.js, WebGPU/WASM)]
-  clip --> embed[Feature Embedding]
-  
-  refDb[(Cached Reference Embeddings in IndexedDB)] --> compare
-  embed --> compare{Cosine Similarity Match}
-  
-  compare -- Score > 0.64 & Margin > 0.03 --> confirm{Consecutive Frames >= 3?}
-  confirm -- Yes --> result[Show Landmark Result Card]
-```
-
-```mermaid
-flowchart TD
-  gps[GPS Location] --> snap[Route Snapping]
-  compass[Device Compass/Tilt] --> snap
-  snap --> proj[Perspective Projection]
-  proj --> draw[Draw AR Line Path on Canvas]
+  frame["Camera Frame"] --> resize["Downscale to 224x224 (Local)"]
+  resize --> clip["CLIP Image Encoder (Transformers.js, WebGPU/WASM)"]
+  clip --> embed["Feature Embedding"]
+  refDb[("Cached Reference Embeddings in IndexedDB")] --> compare
+  embed --> compare{"Cosine Similarity Match"}
+  compare -- "Score > 0.64 & Margin > 0.03" --> confirm{"Consecutive Frames >= 3?"}
+  confirm -- Yes --> result["Show Landmark Result Card"]
 ```
 
 The embeddings for reference places (sceneries) are generated using crops and flips (5 variations per image) and cached in IndexedDB. The thresholds used in the app are 0.64 for the minimum score and 0.03 for the minimum margin over the runner-up, requiring 3 consecutive confirming frames to validate a match.

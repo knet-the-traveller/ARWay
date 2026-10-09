@@ -120,11 +120,58 @@ export default function ProfileMenu({ onClose, onSignOut }: ProfileMenuProps) {
             </div>
           </div>
 
-          {/* Privacy Policy */}
-          <div className="flex items-center justify-between px-4 h-[52px] border-b border-[#262626] active:bg-[#262626] transition-colors cursor-pointer" onClick={() => setShowPrivacy(true)}>
+          {/* Privacy & Cookie Policy */}
+          <div 
+            className="flex items-center justify-between px-4 h-[52px] border-b border-[#262626] active:bg-[#262626] transition-colors cursor-pointer" 
+            onClick={() => {
+              onClose();
+              router.push("/privacy");
+            }}
+          >
             <div className="flex items-center">
               <ShieldIcon className="w-6 h-6 text-white mr-3" />
-              <span className="text-[16px] text-white">Privacy Policy</span>
+              <div className="flex flex-col">
+                <span className="text-[15px] font-medium text-white">Privacy &amp; Cookie Policy</span>
+                <span className="text-[10px] text-gray-400">On-device vision &amp; zero tracking</span>
+              </div>
+            </div>
+            <ChevronRightIcon className="w-5 h-5 text-gray-500" />
+          </div>
+
+          {/* Terms of Service */}
+          <div 
+            className="flex items-center justify-between px-4 h-[52px] border-b border-[#262626] active:bg-[#262626] transition-colors cursor-pointer" 
+            onClick={() => {
+              onClose();
+              router.push("/terms");
+            }}
+          >
+            <div className="flex items-center">
+              <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mr-3 shrink-0">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[15px] font-medium text-white">Terms of Service</span>
+                <span className="text-[10px] text-gray-400">Pedestrian AR safety disclaimer</span>
+              </div>
+            </div>
+            <ChevronRightIcon className="w-5 h-5 text-gray-500" />
+          </div>
+
+          {/* Contact Developers */}
+          <div 
+            className="flex items-center justify-between px-4 h-[52px] border-b border-[#262626] active:bg-[#262626] transition-colors cursor-pointer" 
+            onClick={() => setShowPrivacy(true)}
+          >
+            <div className="flex items-center">
+              <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mr-3 shrink-0">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <span className="text-[15px] font-medium text-white">Contact Developers</span>
             </div>
             <ChevronRightIcon className="w-5 h-5 text-gray-500" />
           </div>
@@ -133,7 +180,7 @@ export default function ProfileMenu({ onClose, onSignOut }: ProfileMenuProps) {
           <div className="flex items-center justify-between px-4 h-[52px] border-b border-[#262626] active:bg-[#262626] transition-colors cursor-pointer" onClick={() => setShowAbout(true)}>
             <div className="flex items-center">
               <InfoIcon className="w-6 h-6 text-white mr-3" />
-              <span className="text-[16px] text-white">About ARWay</span>
+              <span className="text-[15px] font-medium text-white">About ARWay</span>
             </div>
             <ChevronRightIcon className="w-5 h-5 text-gray-500" />
           </div>
@@ -163,22 +210,81 @@ export default function ProfileMenu({ onClose, onSignOut }: ProfileMenuProps) {
       {(showPrivacy || showAbout) && (
         <>
           <div className="fixed inset-0 bg-black/60 z-[202] backdrop-blur-sm" onClick={() => { setShowPrivacy(false); setShowAbout(false); }} />
-          <div className="fixed bottom-0 left-0 right-0 max-h-[80vh] bg-[#1c1c1e] z-[203] rounded-t-2xl flex flex-col sm:w-[375px] sm:left-1/2 sm:-translate-x-1/2">
+          <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] bg-[#1c1c1e] z-[203] rounded-t-2xl flex flex-col sm:w-[375px] sm:left-1/2 sm:-translate-x-1/2 overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-gray-800 shrink-0">
-              <h2 className="text-white font-semibold text-lg">{showPrivacy ? 'Privacy Policy' : 'About ARWay'}</h2>
+              <h2 className="text-white font-semibold text-lg">{showPrivacy ? 'Contact Developers' : 'About ARWay'}</h2>
               <button onClick={() => { setShowPrivacy(false); setShowAbout(false); }} className="p-1 active:opacity-70 text-white">
                 <CloseIcon className="w-6 h-6" />
               </button>
             </div>
-            <div className="p-6 text-gray-300 pb-12" style={{ paddingBottom: "calc(48px + env(safe-area-inset-bottom))" }}>
+            <div className="p-5 text-gray-300 pb-12 text-xs space-y-4" style={{ paddingBottom: "calc(48px + env(safe-area-inset-bottom))" }}>
               {showPrivacy ? (
-                <p>We do not track your personal data. Location data is processed locally on your device for distance calculation and map rendering. This is a prototype application.</p>
+                <div className="space-y-3">
+                  <p className="text-neutral-300 leading-relaxed">
+                    Have feedback, discovered a bug, or have questions about local offline AI or compliance? We&apos;d love to hear from you.
+                  </p>
+
+                  <div className="bg-white/5 rounded-xl p-3 border border-white/5 space-y-2">
+                    <div>
+                      <span className="text-neutral-400 block text-[10px]">TEAM</span>
+                      <span className="text-white font-medium">Sector 4</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-400 block text-[10px]">EVENT &amp; TRACK</span>
+                      <span className="text-white font-medium">AppBuildersPH 2026 — Local AI Track</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-400 block text-[10px]">TEAM LEAD / DEVELOPER EMAIL</span>
+                      <a href="mailto:markkennethbgalario@gmail.com" className="text-blue-400 underline font-medium break-all">markkennethbgalario@gmail.com</a>
+                    </div>
+                    <div>
+                      <span className="text-neutral-400 block text-[10px]">GITHUB (TEAM LEAD)</span>
+                      <a href="https://github.com/knet-the-traveller" target="_blank" rel="noreferrer" className="text-blue-400 underline font-medium">github.com/knet-the-traveller</a>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPrivacy(false);
+                        onClose();
+                        router.push("/privacy");
+                      }}
+                      className="flex-1 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium text-center transition-colors"
+                    >
+                      Privacy Policy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPrivacy(false);
+                        onClose();
+                        router.push("/terms");
+                      }}
+                      className="flex-1 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium text-center transition-colors"
+                    >
+                      Terms of Service
+                    </button>
+                  </div>
+                </div>
               ) : (
-                <>
-                  <h3 className="text-white font-bold text-xl mb-1">ARWay</h3>
-                  <p className="text-sm text-gray-500 mb-4">v0.1 prototype</p>
-                  <p>AR walking navigation for Manila.</p>
-                </>
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-white font-bold text-xl mb-0.5">ARWay</h3>
+                    <div className="inline-block px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] font-semibold rounded-full border border-blue-500/30">
+                      v1.2.0 (AppBuildersPH 2026 Production)
+                    </div>
+                  </div>
+                  <p className="leading-relaxed">
+                    ARWay is an offline-first Augmented Reality Wayfinder and Landmark Vision guide for Manila heritage zones. Powered by client-side Transformers.js and offline vector search.
+                  </p>
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/5 space-y-1 text-[11px] text-neutral-300">
+                    <div>⚡ <strong>Instant AI:</strong> Quantized CLIP embeddings (&lt;50ms)</div>
+                    <div>🧭 <strong>AR HUD:</strong> Compass-aligned ground navigation chevrons</div>
+                    <div>📶 <strong>100% Offline:</strong> Standalone PWA with zero cloud video upload</div>
+                  </div>
+                </div>
               )}
             </div>
           </div>

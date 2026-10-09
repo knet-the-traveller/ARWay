@@ -10,7 +10,9 @@ export const ROUTES_TO_CACHE: string[] = [
   "/maps",
   "/sceneries",
   "/shop",
-  "/profile"
+  "/profile",
+  "/privacy",
+  "/terms"
 ];
 
 // 2. Demo areas for offline map tiles pre-caching
@@ -65,7 +67,7 @@ export function getImageSources(): string[] {
         const posts = JSON.parse(data);
         if (Array.isArray(posts)) {
           for (const post of posts) {
-            if (post.image && (post.image.startsWith("/sceneries/") || post.image.startsWith("/shops/"))) {
+            if (post.image && (post.image.startsWith("/sceneries/") || post.image.startsWith("/shop/") || post.image.startsWith("/shops/"))) {
               images.add(post.image);
             }
           }

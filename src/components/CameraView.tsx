@@ -10,6 +10,14 @@ interface CameraViewProps {
   onZoomChange?: (zoom: 0.5 | 1 | 2) => void;
 }
 
+interface RearLensInfo {
+  deviceId: string;
+  label: string;
+  name: string;
+  isUltraWide: boolean;
+  isMain: boolean;
+}
+
 export default function CameraView({ 
   onVideoReady, 
   isActive = true, 
@@ -24,6 +32,12 @@ export default function CameraView({
   const [starting, setStarting] = useState(false);
   const [currentZoom, setCurrentZoom] = useState<0.5 | 1 | 2>(externalZoom || 1);
   const [usingCssZoom, setUsingCssZoom] = useState(false);
+  
+  // Hardware multi-lens state for Samsung A54 and multi-camera devices
+  const [availableLenses, setAvailableLenses] = useState<RearLensInfo[]>([]);
+  const [activeLens, setActiveLens] = useState<RearLensInfo | null>(null);
+  const [mainLensId, setMainLensId] = useState<string | null>(null);
+  const [ultraWideLensId, setUltraWideLensId] = useState<string | null>(null);
 
   // Sync external zoom prop if updated externally
   useEffect(() => {
@@ -32,10 +46,84 @@ export default function CameraView({
     }
   }, [externalZoom]);
 
+  // Helper to switch physical hardware video stream by deviceId
+  const switchPhysicalStream = async (deviceId: string, targetZoomLevel: 0.5 | 1 | 2 = 1) => {
+    try {
+      setStarting(true);
+      // Stop existing hardware stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      trackRef.current = null;
+
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          deviceId: { exact: deviceId },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        },
+        audio: false
+      });
+
+      streamRef.current = newStream;
+      const [newTrack] = newStream.getVideoTracks();
+      if (newTrack) {
+        trackRef.current = newTrack;
+        // Try hardware zoom if targetZoomLevel is 2x
+        if (targetZoomLevel === 2) {
+          try {
+            const caps = newTrack.getCapabilities ? (newTrack.getCapabilities() as any) : {};
+            if (caps && caps.zoom && caps.zoom.max >= 2) {
+              await newTrack.applyConstraints({ advanced: [{ zoom: 2 } as any] });
+              setUsingCssZoom(false);
+            } else {
+              setUsingCssZoom(true);
+            }
+          } catch {
+            setUsingCssZoom(true);
+          }
+        } else {
+          setUsingCssZoom(false);
+        }
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = newStream;
+        await videoRef.current.play().catch(() => {});
+      }
+
+      // Update active lens state
+      const matched = availableLenses.find((l) => l.deviceId === deviceId);
+      if (matched) {
+        setActiveLens(matched);
+      }
+    } catch (e: any) {
+      console.warn("Failed to switch physical camera stream:", e);
+    } finally {
+      setStarting(false);
+    }
+  };
+
   const handleSetZoom = async (lvl: 0.5 | 1 | 2) => {
     setCurrentZoom(lvl);
     onZoomChange?.(lvl);
 
+    // If switching to 0.5x and a dedicated ultra-wide hardware sensor exists:
+    if (lvl === 0.5 && ultraWideLensId && activeLens?.deviceId !== ultraWideLensId) {
+      console.log("Switching physical sensor to Ultra-Wide (0.5x)...");
+      await switchPhysicalStream(ultraWideLensId, 0.5);
+      return;
+    }
+
+    // If switching to 1x or 2x and we are currently on ultra-wide, switch back to main 1x sensor:
+    if ((lvl === 1 || lvl === 2) && mainLensId && activeLens?.deviceId !== mainLensId) {
+      console.log("Switching physical sensor back to Main 1x (50MP)...");
+      await switchPhysicalStream(mainLensId, lvl);
+      return;
+    }
+
+    // Otherwise apply zoom on the current active sensor:
     const track = trackRef.current;
     let hardwareApplied = false;
 
@@ -60,6 +148,27 @@ export default function CameraView({
     setUsingCssZoom(!hardwareApplied);
   };
 
+  // Cycle through physical lenses manually (allows instant hardware verification)
+  const cyclePhysicalLens = async () => {
+    if (availableLenses.length <= 1) return;
+    const currentIndex = availableLenses.findIndex((l) => l.deviceId === activeLens?.deviceId);
+    const nextIndex = (currentIndex + 1) % availableLenses.length;
+    const nextLens = availableLenses[nextIndex];
+    if (nextLens) {
+      console.log(`Manually switching to lens: ${nextLens.name} (${nextLens.deviceId})`);
+      await switchPhysicalStream(nextLens.deviceId, currentZoom);
+      setActiveLens(nextLens);
+      // Auto-sync zoom pill to 0.5x if ultra-wide, or 1x if main
+      if (nextLens.isUltraWide) {
+        setCurrentZoom(0.5);
+        onZoomChange?.(0.5);
+      } else if (nextLens.isMain && currentZoom === 0.5) {
+        setCurrentZoom(1);
+        onZoomChange?.(1);
+      }
+    }
+  };
+
   useEffect(() => {
     let unmounted = false;
 
@@ -74,56 +183,115 @@ export default function CameraView({
 
         let stream: MediaStream | null = null;
 
-        // 1. Device enumeration to avoid 0.5x ultra-wide default on Samsung A54 and multi-lens Android devices
+        // Step 1: Open initial camera stream to grant camera permissions
         try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const videoDevices = devices.filter((d) => d.kind === "videoinput");
-
-          const backCameras = videoDevices.filter((d) => {
-            const label = d.label.toLowerCase();
-            return label.includes("back") || label.includes("rear") || label.includes("environment");
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            },
+            audio: false,
           });
-
-          if (backCameras.length > 1) {
-            // Main 1x camera usually has label '0' or does not mention 'ultra' / '0.5' / 'wide-angle'
-            const mainCamera = backCameras.find((d) => {
-              const label = d.label.toLowerCase();
-              return !label.includes("ultra") && !label.includes("0.5") && !label.includes("wide-angle") && !label.includes("wide angle");
-            }) || backCameras[0];
-
-            if (mainCamera && mainCamera.deviceId) {
-              stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                  deviceId: { exact: mainCamera.deviceId },
-                  width: { ideal: 1920 },
-                  height: { ideal: 1080 }
-                },
-                audio: false
-              });
-            }
-          }
-        } catch (enumErr) {
-          console.log("Device enumeration fallback:", enumErr);
+        } catch {
+          // Fallback to any default camera (e.g. laptop webcam)
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
         }
 
-        // Standard fallback if specific lens device ID was not selected
-        if (!stream) {
-          try {
+        if (unmounted || !isActive) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        // Step 2: Now that permissions are active, enumerate devices with full labels!
+        let discoveredMainId: string | null = null;
+        let discoveredUltraWideId: string | null = null;
+        let parsedLenses: RearLensInfo[] = [];
+
+        try {
+          const allDevices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = allDevices.filter((d) => d.kind === "videoinput");
+
+          // Exclude front/selfie cameras
+          const rearCandidates = videoDevices.filter((d) => {
+            const lbl = (d.label || "").toLowerCase();
+            return !lbl.includes("front") && !lbl.includes("selfie") && !lbl.includes("user");
+          });
+
+          // Filter for back cameras or fallback to rearCandidates
+          const explicitBack = rearCandidates.filter((d) => {
+            const lbl = (d.label || "").toLowerCase();
+            return lbl.includes("back") || lbl.includes("rear") || lbl.includes("environment") || lbl.includes("camera2");
+          });
+
+          const pool = explicitBack.length > 0 ? explicitBack : rearCandidates;
+
+          parsedLenses = pool.map((d, index) => {
+            const lbl = (d.label || "").toLowerCase();
+            // On Samsung Galaxy A54:
+            // "camera2 0, facing back" -> Main 50MP 1x
+            // "camera2 2, facing back" -> Ultra-wide 12MP 0.5x
+            // "camera2 3, facing back" -> Macro
+            const isUltra = lbl.includes("ultra") || lbl.includes("0.5") || lbl.includes("wide-angle") || lbl.includes("camera2 2") || lbl.includes("camera 2");
+            const isMain = lbl.includes("camera2 0") || lbl.includes("camera 0") || lbl.includes("back 0") || (!isUltra && !lbl.includes("macro") && (index === 0 || lbl.includes("main")));
+
+            let name = `Camera ${index + 1}`;
+            if (isUltra) name = "0.5x Ultra-Wide";
+            else if (isMain) name = "1x Main (50MP)";
+            else if (lbl.includes("macro")) name = "Macro";
+
+            return {
+              deviceId: d.deviceId,
+              label: d.label || `Camera ${index + 1}`,
+              name,
+              isUltraWide: isUltra,
+              isMain
+            };
+          });
+
+          // Find specific Main vs UltraWide IDs
+          const mainObj = parsedLenses.find((l) => l.isMain) || parsedLenses[0];
+          const ultraObj = parsedLenses.find((l) => l.isUltraWide) || parsedLenses.find((l) => l.deviceId !== mainObj?.deviceId);
+
+          if (mainObj) discoveredMainId = mainObj.deviceId;
+          if (ultraObj && ultraObj.deviceId !== discoveredMainId) discoveredUltraWideId = ultraObj.deviceId;
+
+          setAvailableLenses(parsedLenses);
+          setMainLensId(discoveredMainId);
+          setUltraWideLensId(discoveredUltraWideId);
+
+          // Step 3: Check currently active track.
+          // On Samsung A54, "facingMode: { ideal: 'environment' }" often defaults to camera2 2 (Ultra-wide)!
+          // If we want 1x (default) and the active track is NOT the main 50MP sensor, switch immediately!
+          const activeTrack = stream.getVideoTracks()[0];
+          const activeTrackLabel = (activeTrack?.label || "").toLowerCase();
+          const activeTrackSettings = activeTrack?.getSettings ? activeTrack.getSettings() : {};
+          const activeDeviceId = activeTrackSettings.deviceId;
+
+          const isCurrentlyUltraWide = activeTrackLabel.includes("camera2 2") || 
+            activeTrackLabel.includes("ultra") || 
+            (discoveredUltraWideId && activeDeviceId === discoveredUltraWideId);
+
+          if (discoveredMainId && (isCurrentlyUltraWide || (activeDeviceId && activeDeviceId !== discoveredMainId))) {
+            console.log("Samsung A54 default was ultra-wide; immediately switching to physical 1x Main sensor:", discoveredMainId);
+            // Stop ultra-wide bootstrap stream
+            stream.getTracks().forEach((t) => t.stop());
+
+            // Open the physical 50MP Main 1x camera
             stream = await navigator.mediaDevices.getUserMedia({
-              video: { 
-                facingMode: { ideal: "environment" },
+              video: {
+                deviceId: { exact: discoveredMainId },
                 width: { ideal: 1920 },
                 height: { ideal: 1080 }
               },
-              audio: false,
-            });
-          } catch {
-            // Fallback to any default camera (e.g. laptop webcam)
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: true,
-              audio: false,
+              audio: false
             });
           }
+        } catch (enumErr) {
+          console.warn("Post-permission camera enumeration note:", enumErr);
         }
 
         if (unmounted || !isActive) {
@@ -135,19 +303,15 @@ export default function CameraView({
         const [track] = stream.getVideoTracks();
         if (track) {
           trackRef.current = track;
-          // Apply initial 1x zoom constraint
-          try {
-            const capabilities = track.getCapabilities ? (track.getCapabilities() as any) : {};
-            if (capabilities && capabilities.zoom) {
-              const target = Math.max(1.0, capabilities.zoom.min || 1.0);
-              await track.applyConstraints({
-                advanced: [{ zoom: target } as any]
-              });
-            }
-          } catch (zErr) {
-            console.log("Initial zoom constraint error:", zErr);
-          }
         }
+
+        // Set active lens info
+        const activeTrackSettings = track?.getSettings ? track.getSettings() : {};
+        const currentDevId = activeTrackSettings.deviceId;
+        const currentLens = parsedLenses.find((l) => l.deviceId === currentDevId) || 
+          parsedLenses.find((l) => l.isMain) || 
+          (parsedLenses.length > 0 ? parsedLenses[0] : null);
+        setActiveLens(currentLens);
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -274,6 +438,23 @@ export default function CameraView({
           {starting && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none">
               <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+
+          {/* PHYSICAL LENS INDICATOR & TOGGLE (Direct hardware switch for Samsung multi-lens) */}
+          {availableLenses.length > 1 && (
+            <div className="absolute bottom-2.5 left-2.5 z-30 pointer-events-auto">
+              <button
+                type="button"
+                onClick={cyclePhysicalLens}
+                className="bg-black/65 hover:bg-black/85 backdrop-blur-md px-2 py-1 rounded-full border border-white/10 text-[10px] text-neutral-300 hover:text-white flex items-center gap-1 shadow-md active:scale-95 transition-all select-none"
+                title="Tap to switch physical rear camera sensor (Main 50MP vs Ultra-wide 12MP)"
+              >
+                <svg className="w-3 h-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span className="font-semibold text-[10px] text-blue-300">{activeLens?.name || "Lens"}</span>
+              </button>
             </div>
           )}
 

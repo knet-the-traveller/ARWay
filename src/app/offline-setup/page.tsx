@@ -15,6 +15,7 @@ import {
   saveOfflineSummary,
   VerifyItem
 } from "@/lib/offline";
+import { ROUTES_TO_CACHE } from "@/lib/offlineConfig";
 
 export default function OfflineSetupPage() {
   const isOnline = useOnlineStatus();
@@ -27,7 +28,7 @@ export default function OfflineSetupPage() {
 
   // Preparation progress states
   const [isPreparing, setIsPreparing] = useState<boolean>(false);
-  const [step1Progress, setStep1Progress] = useState<{ count: number; total: number; label: string; err?: string }>({ count: 0, total: 5, label: "Pending" });
+  const [step1Progress, setStep1Progress] = useState<{ count: number; total: number; label: string; err?: string }>({ count: 0, total: ROUTES_TO_CACHE.length, label: "Pending" });
   const [step2Progress, setStep2Progress] = useState<{ count: number; total: number; label: string; err?: string }>({ count: 0, total: 0, label: "Pending" });
   const [step3Progress, setStep3Progress] = useState<{ label: string; err?: string; done: boolean }>({ label: "Pending", done: false });
   const [step4Progress, setStep4Progress] = useState<{ count: number; total: number; label: string; err?: string }>({ count: 0, total: 0, label: "Pending" });
@@ -73,14 +74,14 @@ export default function OfflineSetupPage() {
 
     // Step 1: Pages & Chunks
     try {
-      setStep1Progress({ count: 0, total: 5, label: "Starting..." });
+      setStep1Progress({ count: 0, total: ROUTES_TO_CACHE.length, label: "Starting..." });
       pagesRes = await warmPages((curr, tot, lbl) => {
         setStep1Progress({ count: curr, total: tot, label: lbl });
       });
       setStep1Progress({
         count: pagesRes.pagesCount,
-        total: 5,
-        label: `Cached ${pagesRes.pagesCount} pages and ${pagesRes.chunksCount} code chunks`
+        total: ROUTES_TO_CACHE.length,
+        label: `Cached ${pagesRes.pagesCount} core routes (HTML & RSC) and ${pagesRes.chunksCount} code chunks`
       });
     } catch (e: any) {
       setStep1Progress((prev) => ({ ...prev, err: e.message || "Failed to cache pages" }));

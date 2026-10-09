@@ -24,6 +24,20 @@ interface PlaceSearchProps {
   className?: string;
 }
 
+const COMMON_NEARBY_POIS: PlaceResult[] = [
+  // Fast Food & Everyday Spots in Intramuros / Manila / Makati Demo Zones (100% offline ready)
+  { id: "poi-mcdo-intramuros", name: "McDonald's Intramuros", address: "General Luna St, Intramuros, Manila", lat: 14.5898, lng: 120.9749, tag: "Fast Food" },
+  { id: "poi-mcdo-binondo", name: "McDonald's Binondo", address: "Plaza Lorenzo Ruiz, Binondo, Manila", lat: 14.5997, lng: 120.9744, tag: "Fast Food" },
+  { id: "poi-mcdo-greenbelt", name: "McDonald's Greenbelt", address: "Ayala Center, Makati, Metro Manila", lat: 14.5518, lng: 121.0205, tag: "Fast Food" },
+  { id: "poi-mcdo-sm-makati", name: "McDonald's SM Makati", address: "Hotel Dr, Ayala Center, Makati", lat: 14.5494, lng: 121.0267, tag: "Fast Food" },
+  { id: "poi-jollibee-intramuros", name: "Jollibee Intramuros", address: "Muralla St, Intramuros, Manila", lat: 14.5925, lng: 120.9782, tag: "Fast Food" },
+  { id: "poi-jollibee-binondo", name: "Jollibee Plaza Lorenzo Ruiz", address: "Quintin Paredes St, Binondo, Manila", lat: 14.5993, lng: 120.9748, tag: "Fast Food" },
+  { id: "poi-jollibee-ayala", name: "Jollibee Ayala Triangle", address: "Paseo de Roxas, Makati", lat: 14.5568, lng: 121.0239, tag: "Fast Food" },
+  { id: "poi-7eleven-general-luna", name: "7-Eleven General Luna", address: "General Luna St, Intramuros, Manila", lat: 14.5888, lng: 120.9752, tag: "Store" },
+  { id: "poi-starbucks-isabel", name: "Starbucks Puerta de Isabel II", address: "Muralla St, Intramuros, Manila", lat: 14.5946, lng: 120.9765, tag: "Cafe" },
+  { id: "poi-starbucks-greenbelt", name: "Starbucks Greenbelt 3", address: "Esperanza St, Ayala Center, Makati", lat: 14.5522, lng: 121.0211, tag: "Cafe" }
+];
+
 export default function PlaceSearch({
   userLocation,
   userPosition,
@@ -58,7 +72,8 @@ export default function PlaceSearch({
   }, []);
 
   const searchPlaces = async (text: string) => {
-    if (!text.trim() || text.length < 2) {
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.length < 2) {
       setResults([]);
       setLoading(false);
       return;
@@ -66,11 +81,26 @@ export default function PlaceSearch({
 
     setLoading(true);
 
-    // 1. Local search from sceneries and shops (instant & 100% offline ready)
-    const lower = text.toLowerCase();
+    // 1. Local search from common POIs (McDonald's, Jollibee, etc.), sceneries, and shops (100% offline ready)
+    const lower = trimmed.toLowerCase();
+    const cleanLower = lower.replace(/['']/g, "");
     const localMatches: PlaceResult[] = [];
+
+    // Check offline POIs (McDonald's, Jollibee, 7-Eleven, etc.)
+    for (const p of COMMON_NEARBY_POIS) {
+      const pName = p.name.toLowerCase();
+      const pClean = pName.replace(/['']/g, "");
+      if (pName.includes(lower) || pClean.includes(cleanLower) || p.address.toLowerCase().includes(lower)) {
+        const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat: p.lat, lng: p.lng }) : undefined;
+        localMatches.push({ ...p, distanceM: dist });
+      }
+    }
+
+    // Check sceneries
     for (const s of sceneries) {
-      if (s.name.toLowerCase().includes(lower) || s.address.toLowerCase().includes(lower)) {
+      const sName = s.name.toLowerCase();
+      const sClean = sName.replace(/['']/g, "");
+      if (sName.includes(lower) || sClean.includes(cleanLower) || s.address.toLowerCase().includes(lower)) {
         const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat: s.lat, lng: s.lng }) : undefined;
         localMatches.push({
           id: `local-scenery-${s.id}`,
@@ -83,8 +113,12 @@ export default function PlaceSearch({
         });
       }
     }
+
+    // Check shops
     for (const sh of shops) {
-      if (sh.name.toLowerCase().includes(lower) || sh.address.toLowerCase().includes(lower)) {
+      const shName = sh.name.toLowerCase();
+      const shClean = shName.replace(/['']/g, "");
+      if (shName.includes(lower) || shClean.includes(cleanLower) || sh.address.toLowerCase().includes(lower)) {
         const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat: sh.lat, lng: sh.lng }) : undefined;
         localMatches.push({
           id: `local-shop-${sh.id}`,
@@ -99,18 +133,19 @@ export default function PlaceSearch({
     }
 
     try {
+      const onlineMatches: PlaceResult[] = [];
+
       // 2. Photon Geocoder (Fast OpenStreetMap Search by Komoot, 0 keys needed)
-      let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&limit=6`;
+      const photonQuery = trimmed.replace(/['']/g, "");
+      let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(photonQuery)}&limit=6`;
       if (effectiveUserPos) {
         url += `&lat=${effectiveUserPos.lat}&lon=${effectiveUserPos.lng}`;
       }
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3500);
+      const timeout = setTimeout(() => controller.abort(), 2500);
       const res = await fetch(url, { signal: controller.signal }).catch(() => null);
       clearTimeout(timeout);
-
-      const onlineMatches: PlaceResult[] = [];
 
       if (res && res.ok) {
         const data = await res.json();
@@ -121,7 +156,7 @@ export default function PlaceSearch({
             const lng = coords[0];
             const lat = coords[1];
 
-            const name = props.name || props.street || text;
+            const name = props.name || props.street || trimmed;
             const addressParts = [
               props.street ? `${props.housenumber || ""} ${props.street}`.trim() : null,
               props.city || props.district || props.county,
@@ -143,7 +178,41 @@ export default function PlaceSearch({
         }
       }
 
-      // Deduplicate and combine
+      // 3. Nominatim Fallback if Photon returned 0 results online
+      if (onlineMatches.length === 0 && typeof navigator !== "undefined" && navigator.onLine) {
+        try {
+          const nomUrl = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(trimmed)}&countrycodes=ph&limit=6&accept-language=en`;
+          const nCtrl = new AbortController();
+          const nTimeout = setTimeout(() => nCtrl.abort(), 2500);
+          const nRes = await fetch(nomUrl, { signal: nCtrl.signal }).catch(() => null);
+          clearTimeout(nTimeout);
+
+          if (nRes && nRes.ok) {
+            const nData = await nRes.json();
+            if (Array.isArray(nData)) {
+              nData.forEach((item: any, idx: number) => {
+                const parts = item.display_name.split(",");
+                const name = parts[0].trim();
+                const address = parts.slice(1, 4).join(",").trim() || "Philippines";
+                const lat = parseFloat(item.lat);
+                const lng = parseFloat(item.lon);
+                const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat, lng }) : undefined;
+
+                onlineMatches.push({
+                  id: `nom-${idx}-${lat}-${lng}`,
+                  name,
+                  address,
+                  lat,
+                  lng,
+                  distanceM: dist
+                });
+              });
+            }
+          }
+        } catch {}
+      }
+
+      // Deduplicate and combine (local POIs prioritize instant offline response)
       const combined = [...localMatches];
       for (const om of onlineMatches) {
         const isDup = combined.some(c =>
@@ -182,7 +251,7 @@ export default function PlaceSearch({
 
     debounceTimerRef.current = setTimeout(() => {
       searchPlaces(val);
-    }, 300);
+    }, 250);
   };
 
   const handleSelect = (place: PlaceResult) => {
@@ -218,7 +287,7 @@ export default function PlaceSearch({
           value={query}
           onChange={handleInputChange}
           onFocus={() => query.length >= 2 && setIsOpen(true)}
-          placeholder="Search any building, McDonald's, street..."
+          placeholder="Search McDonald's, street, landmark..."
           className="bg-transparent flex-1 text-xs text-white placeholder-neutral-500 focus:outline-none min-w-0"
         />
 
@@ -228,6 +297,7 @@ export default function PlaceSearch({
 
         {query && (
           <button
+            type="button"
             onClick={() => {
               setQuery("");
               setResults([]);
@@ -242,12 +312,22 @@ export default function PlaceSearch({
 
       {/* AUTOCOMPLETE RESULTS DROPDOWN */}
       {isOpen && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#1c1c1e]/98 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden divide-y divide-white/5 max-h-[220px] overflow-y-auto z-[500]">
+        <div 
+          className="absolute top-full left-0 right-0 mt-1.5 bg-[#1c1c1e]/98 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden divide-y divide-white/5 max-h-[220px] overflow-y-auto z-[500]"
+          onTouchStart={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.preventDefault()}
+        >
           {results.map((res) => (
             <button
               key={res.id}
+              type="button"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSelect(res);
+              }}
               onClick={() => handleSelect(res)}
-              className="w-full text-left px-3.5 py-2.5 hover:bg-white/5 active:bg-blue-600/20 flex items-center justify-between gap-2 transition-colors group"
+              className="w-full text-left px-3.5 py-2.5 hover:bg-white/5 active:bg-blue-600/20 flex items-center justify-between gap-2 transition-colors group cursor-pointer"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
