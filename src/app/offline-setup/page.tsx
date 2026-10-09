@@ -15,7 +15,6 @@ import {
   saveOfflineSummary,
   VerifyItem
 } from "@/lib/offline";
-import { warmCatalogRoutes } from "@/lib/route";
 
 export default function OfflineSetupPage() {
   const isOnline = useOnlineStatus();
@@ -112,39 +111,26 @@ export default function OfflineSetupPage() {
       setStep3Progress({ label: "Failed to initialize model", err: e.message || "Error", done: false });
     }
 
-    // Step 4: Map Tiles & Walking Routes
+    // Step 4: Map Tiles
     try {
-      setStep4Progress({ count: 0, total: 100, label: "Locating & preparing tiles..." });
-
+      setStep4Progress({ count: 0, total: 100, label: "Starting..." });
       let userPos: { lat: number; lng: number } | undefined = undefined;
-      if (typeof window !== "undefined") {
-        try {
-          const saved = localStorage.getItem("arway_last_position");
-          if (saved) userPos = JSON.parse(saved);
-        } catch (e) {}
-      }
-      if (!userPos && typeof navigator !== "undefined" && navigator.geolocation) {
-        try {
-          const posPromise = new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000, enableHighAccuracy: true });
+      try {
+        if (typeof navigator !== "undefined" && "geolocation" in navigator) {
+          userPos = await new Promise((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+              (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+              () => resolve(undefined),
+              { timeout: 2000, maximumAge: 60000 }
+            );
           });
-          const pos = await posPromise;
-          userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        } catch (e) {}
-      }
+        }
+      } catch {}
 
-      tilesCount = await warmTiles(userPos, (curr, tot, lbl) => {
+      tilesCount = await warmTiles((curr, tot, lbl) => {
         setStep4Progress({ count: curr, total: tot, label: lbl });
-      });
-
-      if (userPos) {
-        setStep4Progress({ count: tilesCount, total: tilesCount, label: "Pre-caching walking street routes..." });
-        await warmCatalogRoutes(userPos, (curr, tot, lbl) => {
-          setStep4Progress({ count: tilesCount, total: tilesCount, label: `Routes: ${lbl}` });
-        });
-      }
-
-      setStep4Progress({ count: tilesCount, total: tilesCount, label: `Cached ${tilesCount} map tiles & street corridors` });
+      }, userPos);
+      setStep4Progress({ count: tilesCount, total: tilesCount, label: `Cached ${tilesCount} map tiles (${userPos ? "local neighborhood + demo areas" : "demo areas"})` });
     } catch (e: any) {
       setStep4Progress((prev) => ({ ...prev, err: e.message || "Failed to cache tiles" }));
     }
@@ -271,7 +257,7 @@ export default function OfflineSetupPage() {
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
-              <span><strong>Map tiles & routes:</strong> Local area tiles & pre-cached street corridors (zooms 14–17)</span>
+              <span><strong>Map tiles:</strong> Intramuros & Makati demo area zoom tiles (14–17)</span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />

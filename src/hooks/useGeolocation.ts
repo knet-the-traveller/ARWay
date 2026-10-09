@@ -1,41 +1,39 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+
+export const DEMO_FALLBACK_COORDS = {
+  lat: 14.5917,
+  lng: 120.9734,
+};
 
 export function useGeolocation() {
-  const [position, setPosition] = useState<{ lat: number; lng: number } | null>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("arway_last_position");
-        if (saved) return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return null;
-  });
+  const [livePosition, setLivePosition] = useState<{ lat: number; lng: number } | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isManual, setIsManual] = useState<boolean>(false);
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
 
-  const setManualPosition = useCallback((coords: { lat: number; lng: number }) => {
-    setPosition(coords);
-    setIsManual(true);
-    setAccuracy(5);
-    try {
-      localStorage.setItem("arway_last_position", JSON.stringify(coords));
-    } catch (e) {}
+  // Initialize demo mode preference
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlDemo = searchParams.get("demo") === "true";
+      const savedDemo = localStorage.getItem("arway_demo_mode") === "true";
+      if (urlDemo || savedDemo) {
+        setIsDemoMode(true);
+      }
+    }
   }, []);
 
+  const toggleDemoMode = () => {
+    setIsDemoMode((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("arway_demo_mode", next ? "true" : "false");
+      }
+      return next;
+    });
+  };
+
   useEffect(() => {
-    // Check for explicit ?demo=true query override for synthetic testing
-    const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-    const forceDemo = searchParams?.get("demo") === "true";
-
-    if (forceDemo) {
-      const demoCoords = { lat: 14.5917, lng: 120.9734 };
-      setPosition(demoCoords);
-      setAccuracy(5);
-      setIsManual(true);
-      return;
-    }
-
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setError("Geolocation is not supported by your browser");
       return;
@@ -43,23 +41,15 @@ export function useGeolocation() {
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const coords = {
+        setLivePosition({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
-        };
-        setPosition(coords);
+        });
         setAccuracy(pos.coords.accuracy);
         setError(null);
-        setIsManual(false);
-
-        try {
-          localStorage.setItem("arway_last_position", JSON.stringify(coords));
-        } catch (e) {}
       },
       (err) => {
         setError(err.message);
-        // Do NOT overwrite existing position with hardcoded demo coords.
-        // If position is null, it remains null until user taps map or grants GPS.
       },
       {
         enableHighAccuracy: true,
@@ -73,6 +63,15 @@ export function useGeolocation() {
     };
   }, []);
 
-  return { position, accuracy, error, isManual, setManualPosition };
-}
+  const position = isDemoMode ? DEMO_FALLBACK_COORDS : livePosition;
 
+  return { 
+    position, 
+    livePosition,
+    accuracy: isDemoMode ? 5 : accuracy, 
+    error,
+    isDemoMode,
+    toggleDemoMode,
+    setIsDemoMode
+  };
+}

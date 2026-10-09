@@ -73,14 +73,8 @@ export default function MapView({
     }
     container.innerHTML = "";
 
-    let lastPos: { lat: number; lng: number } | null = null;
-    try {
-      const saved = localStorage.getItem("arway_last_position");
-      if (saved) lastPos = JSON.parse(saved);
-    } catch (e) {}
-
-    const defaultCenter = { lat: 14.5700, lng: 121.0000 }; // Metro Manila Central
-    const initialCenter = position || destination || lastPos || defaultCenter;
+    const defaultCenter = { lat: 14.5917, lng: 120.9734 }; // Manila Cathedral / Intramuros Demo Area
+    const initialCenter = position || destination || defaultCenter;
 
     let map: L.Map;
     try {
@@ -163,6 +157,8 @@ export default function MapView({
     };
   }, []);
 
+  const hasCenteredOnPosRef = useRef(false);
+
   // Update position marker & heading
   useEffect(() => {
     const map = mapRef.current;
@@ -181,12 +177,18 @@ export default function MapView({
           posMarkerRef.current.setLatLng([position.lat, position.lng]);
           posMarkerRef.current.setIcon(icon);
         }
+
+        // Smoothly center on initial GPS fix if no destination is selected
+        if (!hasCenteredOnPosRef.current && !destination) {
+          map.setView([position.lat, position.lng], 17);
+          hasCenteredOnPosRef.current = true;
+        }
       } else if (posMarkerRef.current) {
         posMarkerRef.current.remove();
         posMarkerRef.current = null;
       }
     } catch {}
-  }, [position, heading]);
+  }, [position, heading, destination]);
 
   // Update destination marker & tooltip
   useEffect(() => {
@@ -207,6 +209,9 @@ export default function MapView({
           destMarkerRef.current.setLatLng([destination.lat, destination.lng]);
           destMarkerRef.current.setTooltipContent(destination.name);
         }
+
+        // Pan to newly selected destination
+        map.panTo([destination.lat, destination.lng]);
       } else if (destMarkerRef.current) {
         destMarkerRef.current.remove();
         destMarkerRef.current = null;
