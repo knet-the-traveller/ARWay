@@ -366,24 +366,7 @@ export async function verifyOffline(): Promise<VerifyItem[]> {
     detail: modelCached ? `${modelEntriesCount} files in transformers-cache` : "No model files found in transformers-cache"
   });
 
-  // 6. At least one cdn.jsdelivr.net .wasm entry in arway-cdn, or verified via WebGPU execution
-  let cdnWasmCount = 0;
-  try {
-    const cdnCache = await caches.open("arway-cdn-v1");
-    const keys = await cdnCache.keys();
-    cdnWasmCount = keys.filter((k) => k.url.includes(".wasm")).length;
-  } catch (e) { }
-
-  const runtimeOk = cdnWasmCount > 0 || (modelCached && aiOk);
-  results.push({
-    label: "ONNX Runtime (WASM / WebGPU)",
-    ok: runtimeOk,
-    detail: cdnWasmCount > 0
-      ? `${cdnWasmCount} WASM runtimes stored in arway-cdn`
-      : (aiOk ? "WebGPU hardware acceleration active & verified" : "No WASM runtime files cached in arway-cdn")
-  });
-
-  // 7. AI verification check: test model load & reference prep
+  // 6. AI verification check: test model load & reference prep
   let aiOk = false;
   let elapsedMs = 0;
   try {
@@ -398,6 +381,23 @@ export async function verifyOffline(): Promise<VerifyItem[]> {
     label: "AI Offline Execution Test",
     ok: aiOk,
     detail: aiOk ? `Model verified offline in ${elapsedMs}ms` : "AI offline execution failed"
+  });
+
+  // 7. At least one cdn.jsdelivr.net .wasm entry in arway-cdn, or verified via WebGPU execution
+  let cdnWasmCount = 0;
+  try {
+    const cdnCache = await caches.open("arway-cdn-v1");
+    const keys = await cdnCache.keys();
+    cdnWasmCount = keys.filter((k) => k.url.includes(".wasm")).length;
+  } catch (e) { }
+
+  const runtimeOk = cdnWasmCount > 0 || (modelCached && aiOk);
+  results.push({
+    label: "ONNX Runtime (WASM / WebGPU)",
+    ok: runtimeOk,
+    detail: cdnWasmCount > 0
+      ? `${cdnWasmCount} WASM runtimes stored in arway-cdn`
+      : (aiOk ? "WebGPU hardware acceleration active & verified" : "No WASM runtime files cached in arway-cdn")
   });
 
   return results;
