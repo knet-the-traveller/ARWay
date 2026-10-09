@@ -44,23 +44,13 @@ Zero-shot nearest-neighbour matching against a small set of reference photos (li
 
 ```mermaid
 flowchart TD
-  frame[Camera Frame] --> resize[Downscale to 224x224 (Local)]
-  resize --> clip[CLIP Image Encoder (Transformers.js, WebGPU/WASM)]
-  clip --> embed[Feature Embedding]
-  
-  refDb[(Cached Reference Embeddings in IndexedDB)] --> compare
-  embed --> compare{Cosine Similarity Match}
-  
-  compare -- Score > 0.64 & Margin > 0.03 --> confirm{Consecutive Frames >= 3?}
-  confirm -- Yes --> result[Show Landmark Result Card]
-```
-
-```mermaid
-flowchart TD
-  gps[GPS Location] --> snap[Route Snapping]
-  compass[Device Compass/Tilt] --> snap
-  snap --> proj[Perspective Projection]
-  proj --> draw[Draw AR Line Path on Canvas]
+  frame["Camera Frame"] --> resize["Downscale to 224x224 (Local)"]
+  resize --> clip["CLIP Image Encoder (Transformers.js, WebGPU/WASM)"]
+  clip --> embed["Feature Embedding"]
+  refDb[("Cached Reference Embeddings in IndexedDB")] --> compare
+  embed --> compare{"Cosine Similarity Match"}
+  compare -- "Score > 0.64 & Margin > 0.03" --> confirm{"Consecutive Frames >= 3?"}
+  confirm -- Yes --> result["Show Landmark Result Card"]
 ```
 
 The embeddings for reference places (sceneries) are generated using crops and flips (5 variations per image) and cached in IndexedDB. The thresholds used in the app are 0.64 for the minimum score and 0.03 for the minimum margin over the runner-up, requiring 3 consecutive confirming frames to validate a match.
