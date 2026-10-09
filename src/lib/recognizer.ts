@@ -1,5 +1,6 @@
 import { MODEL_ID, INPUT_SIZE, REFERENCE_VERSION } from "./recognizerConfig";
 import { sceneries } from "./sceneries";
+import precomputedEmbeddings from "./precomputedEmbeddings.json";
 
 let pipelineInstance: any = null;
 let currentDevice: string = "webgpu";
@@ -107,7 +108,7 @@ function normalizeVector(vector: number[] | Float32Array): Float32Array {
   return arr;
 }
 
-function resizeImageToCanvasDataUrl(img: HTMLImageElement | HTMLVideoElement): string {
+function resizeImageToCanvasDataUrl(img: HTMLImageElement | HTMLVideoElement, zoom: number = 1): string {
   const canvas = document.createElement("canvas");
   canvas.width = INPUT_SIZE;
   canvas.height = INPUT_SIZE;
@@ -117,9 +118,15 @@ function resizeImageToCanvasDataUrl(img: HTMLImageElement | HTMLVideoElement): s
   const w = img instanceof HTMLVideoElement ? img.videoWidth : img.width;
   const h = img instanceof HTMLVideoElement ? img.videoHeight : img.height;
   
-  const size = Math.min(w, h);
-  const sx = (w - size) / 2;
-  const sy = (h - size) / 2;
+  // Base square crop
+  let size = Math.min(w, h);
+  // Apply zoom factor (e.g. 2x zoom crops the center 50% of the image)
+  if (zoom > 1) {
+    size = Math.round(size / zoom);
+  }
+  
+  const sx = Math.round((w - size) / 2);
+  const sy = Math.round((h - size) / 2);
 
   ctx.drawImage(img, sx, sy, size, size, 0, 0, INPUT_SIZE, INPUT_SIZE);
   return canvas.toDataURL("image/jpeg", 0.9);
@@ -194,6 +201,26 @@ function loadHTMLImage(url: string): Promise<HTMLImageElement> {
 }
 
 export async function prepareReferences(onProgress?: (done: number, total: number) => void) {
+  references = [];
+
+  // 1. Instant load from precomputed offline embeddings (< 50ms, zero CPU/GPU overhead)
+  if (Array.isArray(precomputedEmbeddings) && precomputedEmbeddings.length > 0) {
+    const total = precomputedEmbeddings.length;
+    for (let i = 0; i < total; i++) {
+      const item = precomputedEmbeddings[i];
+      references.push({
+        placeId: item.placeId,
+        name: item.name,
+        vector: new Float32Array(item.vector)
+      });
+      if (onProgress) {
+        onProgress(i + 1, total);
+      }
+    }
+    return;
+  }
+
+  // 2. Dynamic fallback if precomputed embeddings are unavailable
   let allTasks: Array<{ placeId: string, name: string, url: string, suffix: string }> = [];
   
   for (const place of sceneries) {
@@ -215,7 +242,6 @@ export async function prepareReferences(onProgress?: (done: number, total: numbe
 
   const total = allTasks.length;
   let done = 0;
-  references = [];
 
   // Group by URL to only load each image once
   const tasksByUrl = new Map<string, Array<{ placeId: string, name: string, suffix: string }>>();
@@ -230,8 +256,6 @@ export async function prepareReferences(onProgress?: (done: number, total: numbe
       const crops = extractAugmentedCrops(img);
       
       for (let j = 0; j < crops.length; j++) {
-        // Find the task for this crop (j matches the second part of suffix)
-        // Wait, tasks may be for the same place/url. The suffix is `${i}_${j}`.
         const task = tasks.find(t => t.suffix.endsWith(`_${j}`));
         if (!task) continue;
 
@@ -253,16 +277,15 @@ export async function prepareReferences(onProgress?: (done: number, total: numbe
       }
     } catch (err) {
       console.error(`Failed to embed reference for ${url}:`, err);
-      // Still increment 'done' for skipped tasks to keep progress bar moving
       done += tasks.length;
       if (onProgress) onProgress(done, total);
     }
   }
 }
 
-export async function embedFrame(video: HTMLVideoElement): Promise<Float32Array | null> {
+export async function embedFrame(video: HTMLVideoElement, zoom: number = 1): Promise<Float32Array | null> {
   if (!pipelineInstance) return null;
-  const dataUrl = resizeImageToCanvasDataUrl(video);
+  const dataUrl = resizeImageToCanvasDataUrl(video, zoom);
   if (!dataUrl) return null;
   const output = await pipelineInstance(dataUrl);
   return normalizeVector(output.data);

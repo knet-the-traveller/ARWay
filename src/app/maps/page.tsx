@@ -37,6 +37,7 @@ function MapsContent() {
   const searchParams = useSearchParams();
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const [cameraActive, setCameraActive] = useState(true);
+  const [cameraZoom, setCameraZoom] = useState<0.5 | 1 | 2>(1);
 
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -288,6 +289,8 @@ function MapsContent() {
             onVideoReady={setVideoEl} 
             isActive={cameraActive}
             onToggleActive={() => setCameraActive(prev => !prev)}
+            zoom={cameraZoom}
+            onZoomChange={setCameraZoom}
           />
           {arActive && cameraActive && (
             <ArOverlay 
@@ -299,6 +302,7 @@ function MapsContent() {
               position={effectivePosition}
               route={routeData?.coords || (destination && effectivePosition ? [effectivePosition, destination] : null)}
               realign={realign}
+              zoom={cameraZoom}
             />
           )}
           <LandmarkScanner 
@@ -306,6 +310,7 @@ function MapsContent() {
             arActive={arActive} 
             cameraActive={cameraActive}
             onToggleCamera={() => setCameraActive(prev => !prev)}
+            zoom={cameraZoom}
           />
         </div>
 

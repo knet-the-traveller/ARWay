@@ -19,13 +19,15 @@ interface LandmarkScannerProps {
   arActive?: boolean;
   cameraActive?: boolean;
   onToggleCamera?: () => void;
+  zoom?: number;
 }
 
 export default function LandmarkScanner({ 
   video, 
   arActive, 
   cameraActive = true, 
-  onToggleCamera 
+  onToggleCamera,
+  zoom = 1
 }: LandmarkScannerProps) {
   const router = useRouter();
   const isOnline = useOnlineStatus();
@@ -90,7 +92,7 @@ export default function LandmarkScanner({
 
     const t0 = performance.now();
     try {
-      const vector = await embedFrame(video);
+      const vector = await embedFrame(video, zoom);
       if (!vector) {
         scheduleScan();
         return;
