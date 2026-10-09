@@ -1,20 +1,52 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { getPosts, toggleLike, Post } from "@/lib/posts";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { sceneries } from "@/lib/sceneries";
+import { haversineDistanceM } from "@/lib/geo";
 import CreatePostSheet from "@/components/CreatePostSheet";
 import PackCard from "@/components/home/PackCard";
 import TrailCard from "@/components/home/TrailCard";
 import FeedPost from "@/components/home/FeedPost";
+import GpsStatusPill from "@/components/GpsStatusPill";
 import { sampleFeed } from "@/lib/homeFeed";
 import { NavArrowIcon } from "@/components/icons/NavArrowIcon";
 
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
-  const { position } = useGeolocation();
+  const { position, isDemoMode } = useGeolocation();
+
+  // Dynamically resolve current location name from live GPS or demo fallback
+  const currentLocationName = useMemo(() => {
+    if (isDemoMode) {
+      return "Intramuros";
+    }
+    if (!position) {
+      return "unrecognize location";
+    }
+
+    let closestName: string | null = null;
+    let minDistance = Infinity;
+
+    for (const s of sceneries) {
+      const dist = haversineDistanceM(position, { lat: s.lat, lng: s.lng });
+      if (dist < minDistance) {
+        minDistance = dist;
+        // Clean district/barangay or place name
+        const district = s.address.split(",")[0].trim();
+        closestName = district && !district.includes("Blvd") ? district : s.name;
+      }
+    }
+
+    if (closestName && minDistance <= 2500) {
+      return closestName;
+    }
+
+    return "unrecognize location";
+  }, [position, isDemoMode]);
 
   const loadPosts = async () => {
     const data = await getPosts();
@@ -44,21 +76,18 @@ export default function Home() {
         
         {/* HEADER */}
         <header className="flex items-center justify-between">
-          <h1 className="font-display text-[28px] leading-none tracking-tight" style={{ color: "var(--aw-accent)" }}>ARWays</h1>
-          <div className="aw-pill px-3 py-1.5 rounded-full flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "var(--aw-green)" }}></div>
-            <span className="text-[12px] font-medium leading-none" style={{ color: "var(--aw-muted)" }}>Works offline</span>
-          </div>
+          <h1 className="font-display text-[28px] leading-none tracking-tight" style={{ color: "var(--aw-accent)" }}>ARWay</h1>
+          <GpsStatusPill />
         </header>
 
         {/* LOCATION & GREETING */}
         <div className="flex flex-col gap-1 mt-1">
           <div className="flex items-center gap-1 text-[13px]" style={{ color: "var(--aw-muted)" }}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.242-4.243a8 8 0 1111.314 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span>Currently in: Intramuros</span>
+            <span suppressHydrationWarning>Currently in: {currentLocationName}</span>
           </div>
           <h2 className="font-display text-[30px] leading-tight" style={{ color: "var(--aw-cream)" }}>Hi, Knet</h2>
         </div>

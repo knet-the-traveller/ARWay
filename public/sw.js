@@ -1,9 +1,10 @@
 // ARWay Service Worker - Hand-written offline PWA support
 // No external PWA libraries (plain JavaScript only)
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 
 const CACHE_PAGES = `arway-pages-${CACHE_VERSION}`;
+const CACHE_RSC = `arway-rsc-${CACHE_VERSION}`;
 const CACHE_STATIC = `arway-static-${CACHE_VERSION}`;
 const CACHE_MEDIA = `arway-media-${CACHE_VERSION}`;
 const CACHE_TILES = `arway-tiles-${CACHE_VERSION}`;
@@ -11,6 +12,7 @@ const CACHE_CDN = `arway-cdn-${CACHE_VERSION}`;
 
 const CURRENT_CACHES = [
   CACHE_PAGES,
+  CACHE_RSC,
   CACHE_STATIC,
   CACHE_MEDIA,
   CACHE_TILES,
@@ -31,7 +33,7 @@ self.addEventListener("install", (event) => {
         const offlineFallback = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ARWay - You're offline</title><style>body{margin:0;padding:24px;background:#000;color:#fff;font-family:-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}h1{font-size:22px;margin:0 0 12px}p{font-size:15px;color:#a3a3a3;margin:0 0 24px;max-width:320px}button{width:100%;max-width:320px;height:48px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-weight:600;cursor:pointer}</style></head><body><h1>You're offline</h1><p>Open ARWay once while online and tap Prepare offline on the Offline setup page so everything is saved on your phone.</p><button onclick="window.location.reload()">Try again</button></body></html>`;
         await cache.put("/offline.html", new Response(offlineFallback, {
           status: 200,
-          headers: { "Content-Type": "text/html" }
+          headers: { "Content-Type": "text/html; charset=utf-8" }
         }));
       }
     })
@@ -84,15 +86,24 @@ self.addEventListener("message", (event) => {
   }
 });
 
-// Helper: strip Vary header so Cache API matches across navigation and fetch modes
-function cleanResponseWithoutVary(res) {
+// Helper: strip Vary header and enforce content-type so Cache API never misclassifies
+function cleanResponseWithoutVary(res, forcedContentType) {
   const newHeaders = new Headers(res.headers);
   newHeaders.delete("vary");
+  if (forcedContentType) {
+    newHeaders.set("Content-Type", forcedContentType);
+  }
   return new Response(res.body, {
     status: res.status,
     statusText: res.statusText,
     headers: newHeaders
   });
+}
+
+function isHtmlResponse(res) {
+  if (!res) return false;
+  const ct = res.headers.get("Content-Type") || "";
+  return ct.toLowerCase().includes("text/html");
 }
 
 // Fetch Interception
@@ -118,7 +129,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 1. Navigation requests (HTML pages)
+  // 1. Navigation requests (HTML documents ONLY)
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
@@ -131,42 +142,41 @@ self.addEventListener("fetch", (event) => {
           try {
             const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 800));
             const fetchPromise = fetch(req).then((res) => {
-              if (res && res.ok) {
-                const cleaned = cleanResponseWithoutVary(res.clone());
-                pagesCache.put(req, cleaned);
-                pagesCache.put(url.pathname, cleanResponseWithoutVary(res.clone()));
+              if (res && res.ok && isHtmlResponse(res)) {
+                pagesCache.put(req, cleanResponseWithoutVary(res.clone(), "text/html; charset=utf-8"));
+                pagesCache.put(url.pathname, cleanResponseWithoutVary(res.clone(), "text/html; charset=utf-8"));
               }
               return res;
             }).catch(() => null);
 
             const networkRes = await Promise.race([fetchPromise, timeoutPromise]);
-            if (networkRes && networkRes.ok) {
+            if (networkRes && networkRes.ok && isHtmlResponse(networkRes)) {
               return networkRes;
             }
           } catch (e) {}
         }
 
-        // Offline or timed out: match cache with ignoreVary: true and ignoreSearch: true
-        const cachedMatch = await pagesCache.match(req, matchOpts);
-        if (cachedMatch) return cachedMatch;
+        // Offline or timed out: ONLY match validated HTML documents
+        let candidate = await pagesCache.match(req, matchOpts);
+        if (isHtmlResponse(candidate)) return candidate;
 
         const pathname = url.pathname;
-        const pathMatch = await pagesCache.match(pathname, matchOpts);
-        if (pathMatch) return pathMatch;
+        candidate = await pagesCache.match(pathname, matchOpts);
+        if (isHtmlResponse(candidate)) return candidate;
 
-        // Fallback: cached "/maps"
-        const mapsMatch = await pagesCache.match("/maps", matchOpts);
-        if (mapsMatch) return mapsMatch;
+        // Fallback: cached "/maps" HTML
+        candidate = await pagesCache.match("/maps", matchOpts);
+        if (isHtmlResponse(candidate)) return candidate;
 
-        // Fallback: root "/"
-        const rootMatch = await pagesCache.match("/", matchOpts);
-        if (rootMatch) return rootMatch;
+        // Fallback: root "/" HTML
+        candidate = await pagesCache.match("/", matchOpts);
+        if (isHtmlResponse(candidate)) return candidate;
 
         // Fallback: /offline.html
-        const offlineMatch = await pagesCache.match("/offline.html", matchOpts);
-        if (offlineMatch) return offlineMatch;
+        candidate = await pagesCache.match("/offline.html", matchOpts);
+        if (isHtmlResponse(candidate)) return candidate;
 
-        // Guaranteed inline 200 HTML recovery page (never 503 so Chrome never shows dinosaur)
+        // Guaranteed inline 200 HTML recovery page (never plain text, never dinosaur)
         const inlineHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ARWay - Offline</title><style>body{margin:0;padding:24px;background:#000;color:#fff;font-family:-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}h1{font-size:20px;margin-bottom:8px}p{font-size:14px;color:#888;margin-bottom:20px;max-width:280px}a{display:inline-block;padding:12px 24px;background:#3b82f6;color:#fff;border-radius:12px;text-decoration:none;font-weight:600}</style></head><body><h1>Offline Navigation</h1><p>This tab is not saved yet. Return to Maps or connect online to prepare offline assets.</p><a href="/maps">Return to Maps</a></body></html>`;
         return new Response(inlineHtml, {
           status: 200,
@@ -197,7 +207,6 @@ self.addEventListener("fetch", (event) => {
           }
           return res;
         } catch (e) {
-          // If offline and missing, return empty response so build doesn't throw fatal crash
           return new Response("", { status: 404 });
         }
       })()
@@ -205,12 +214,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 3. Same-origin RSC and data requests
+  // 3. Same-origin RSC and data requests (React Server Components flight stream ONLY -> CACHE_RSC)
   const isRsc = req.headers.get("RSC") === "1" || url.searchParams.has("_rsc") || url.pathname.startsWith("/_next/data/");
   if (url.origin === self.location.origin && isRsc) {
     event.respondWith(
       (async () => {
-        const pagesCache = await caches.open(CACHE_PAGES);
+        const rscCache = await caches.open(CACHE_RSC);
         const matchOpts = { ignoreSearch: true, ignoreVary: true };
         const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
 
@@ -220,9 +229,9 @@ self.addEventListener("fetch", (event) => {
             const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 800));
             const fetchPromise = fetch(req).then((res) => {
               if (res && res.ok) {
-                const cleaned = cleanResponseWithoutVary(res.clone());
-                pagesCache.put(req, cleaned);
-                pagesCache.put(`${url.pathname}?_rsc=offline`, cleanResponseWithoutVary(res.clone()));
+                const cleaned = cleanResponseWithoutVary(res.clone(), "text/x-component; charset=utf-8");
+                rscCache.put(req, cleaned);
+                rscCache.put(`${url.pathname}?_rsc=offline`, cleanResponseWithoutVary(res.clone(), "text/x-component; charset=utf-8"));
               }
               return res;
             }).catch(() => null);
@@ -232,24 +241,15 @@ self.addEventListener("fetch", (event) => {
           } catch (e) {}
         }
 
-        // 1. Try exact request in cache
-        const cached = await pagesCache.match(req, matchOpts);
+        // 1. Try exact request in rscCache
+        const cached = await rscCache.match(req, matchOpts);
         if (cached) return cached;
 
-        // 2. Try pre-warmed RSC payload for this route
-        const rscOffline = await pagesCache.match(`${url.pathname}?_rsc=offline`, matchOpts);
+        // 2. Try pre-warmed RSC payload under pathname?_rsc=offline
+        const rscOffline = await rscCache.match(`${url.pathname}?_rsc=offline`, matchOpts);
         if (rscOffline) return rscOffline;
 
-        // 3. Try route pathname
-        const pathMatch = await pagesCache.match(url.pathname, matchOpts);
-        if (pathMatch) {
-          const ct = pathMatch.headers.get("Content-Type") || "";
-          if (ct.includes("text/x-component")) {
-            return pathMatch;
-          }
-        }
-
-        // If missing, let request fail so Next.js falls back to full-page navigation
+        // If missing, return 503 so Next.js falls back to full-page navigation
         return new Response("RSC fetch failed", { status: 503 });
       })()
     );
@@ -295,7 +295,6 @@ self.addEventListener("fetch", (event) => {
         if (cached) return cached;
 
         try {
-          // Leaflet requests tiles with no-cors. Refetch with cors to store clean non-opaque response.
           let res;
           try {
             res = await fetch(new Request(url.toString(), { mode: "cors" }));
@@ -306,7 +305,6 @@ self.addEventListener("fetch", (event) => {
           if (res && (res.ok || res.type === "opaque")) {
             await tilesCache.put(req, res.clone());
 
-            // Limit cache to MAX_TILES
             const keys = await tilesCache.keys();
             if (keys.length > MAX_TILES) {
               const overflow = keys.length - MAX_TILES;
@@ -318,7 +316,6 @@ self.addEventListener("fetch", (event) => {
           }
         } catch (e) {}
 
-        // If offline and tile missing, return 204 No Content so Leaflet stays blank without error
         return new Response(null, { status: 204 });
       })()
     );

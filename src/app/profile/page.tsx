@@ -101,7 +101,7 @@ export default function ProfilePage() {
         </button>
       </div>
 
-      <PageHeader />
+      <PageHeader showStatus={false} />
 
       <div className="flex-1 overflow-y-auto no-scrollbar pb-[calc(56px+env(safe-area-inset-bottom)+24px)]">
         <div className="px-4">

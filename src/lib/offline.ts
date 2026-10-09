@@ -115,12 +115,14 @@ export async function warmPages(
   let pagesCount = 0;
   const chunkUrls = new Set<string>();
   let pagesCache: Cache | null = null;
+  let rscCache: Cache | null = null;
   let staticCache: Cache | null = null;
 
   try {
     if ("caches" in window) {
-      pagesCache = await caches.open("arway-pages-v1");
-      staticCache = await caches.open("arway-static-v1");
+      pagesCache = await caches.open("arway-pages-v2");
+      rscCache = await caches.open("arway-rsc-v2");
+      staticCache = await caches.open("arway-static-v2");
     }
   } catch (e) {}
 
@@ -130,7 +132,7 @@ export async function warmPages(
     const route = ROUTES_TO_CACHE[i];
     onProgress?.(i, ROUTES_TO_CACHE.length, `Pre-warming ${route}`);
 
-    // 1. Fetch and cache standard HTML document
+    // 1. Fetch and cache standard HTML document ONLY into pagesCache
     try {
       const res = await fetch(route, { credentials: "same-origin" });
       if (res && res.ok) {
@@ -147,7 +149,7 @@ export async function warmPages(
       }
     } catch (e) {}
 
-    // 2. Fetch and cache React Server Component (RSC) flight payload for tab navigation
+    // 2. Fetch and cache React Server Component (RSC) flight payload ONLY into rscCache
     try {
       const rscRes = await fetch(route, {
         headers: { RSC: "1" },
@@ -155,12 +157,12 @@ export async function warmPages(
       });
       if (rscRes && rscRes.ok) {
         const rscText = await rscRes.text();
-        if (pagesCache) {
+        if (rscCache) {
           const rscHeaders = new Headers();
           rscHeaders.set("content-type", "text/x-component; charset=utf-8");
-          // Store under route with _rsc query and as an RSC request
-          await pagesCache.put(`${route}?_rsc=offline`, new Response(rscText, { status: 200, headers: rscHeaders }));
-          await pagesCache.put(
+          // Store in dedicated rscCache under route with _rsc query and as an RSC request
+          await rscCache.put(`${route}?_rsc=offline`, new Response(rscText, { status: 200, headers: rscHeaders }));
+          await rscCache.put(
             new Request(new URL(`${route}?_rsc=offline`, origin).href, { headers: { RSC: "1" } }),
             new Response(rscText, { status: 200, headers: rscHeaders })
           );
@@ -201,7 +203,7 @@ export async function warmImages(
   let mediaCache: Cache | null = null;
   try {
     if ("caches" in window) {
-      mediaCache = await caches.open("arway-media-v1");
+      mediaCache = await caches.open("arway-media-v2");
     }
   } catch (e) {}
 
@@ -254,7 +256,7 @@ export async function prepareAi(
     let cdnCache: Cache | null = null;
     try {
       if ("caches" in window) {
-        cdnCache = await caches.open("arway-cdn-v1");
+        cdnCache = await caches.open("arway-cdn-v2");
       }
     } catch (e) {}
 
@@ -390,7 +392,7 @@ export async function verifyOffline(): Promise<VerifyItem[]> {
   // 4. At least 20 tiles present in arway-tiles
   let tileCount = 0;
   try {
-    const tileCache = await caches.open("arway-tiles-v1");
+    const tileCache = await caches.open("arway-tiles-v2");
     const keys = await tileCache.keys();
     tileCount = keys.length;
   } catch (e) { }
@@ -438,7 +440,7 @@ export async function verifyOffline(): Promise<VerifyItem[]> {
   // 7. At least one cdn.jsdelivr.net .wasm entry in arway-cdn, or verified via WebGPU execution
   let cdnWasmCount = 0;
   try {
-    const cdnCache = await caches.open("arway-cdn-v1");
+    const cdnCache = await caches.open("arway-cdn-v2");
     const keys = await cdnCache.keys();
     cdnWasmCount = keys.filter((k) => k.url.includes(".wasm")).length;
   } catch (e) { }
