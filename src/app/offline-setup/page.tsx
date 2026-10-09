@@ -209,8 +209,8 @@ export default function OfflineSetupPage() {
               </svg>
             </Link>
             <div>
-              <h1 className="text-lg font-bold text-white tracking-tight">Offline Heritage Pack</h1>
-              <p className="text-[11px] text-neutral-400">Intramuros & Manila Heritage Zone</p>
+              <h1 className="text-lg font-bold text-white tracking-tight">Offline Sync</h1>
+              <p className="text-[11px] text-neutral-400">On-Device AI & Maps Cache</p>
             </div>
           </div>
           <div suppressHydrationWarning className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${(mounted ? isOnline : true) ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30" : "bg-sky-950/80 text-sky-400 border border-sky-500/30"
@@ -220,132 +220,116 @@ export default function OfflineSetupPage() {
           </div>
         </div>
 
-        {/* VALUE PROPOSITION HERO CARD */}
-        <section className="bg-gradient-to-br from-neutral-900 to-neutral-950 border border-neutral-800/80 rounded-2xl p-4 mb-4 shadow-lg">
-          <div className="flex items-start gap-3 mb-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shrink-0 text-blue-400">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-white">Zero-Data Heritage Exploration</h2>
-              <p className="text-xs text-neutral-400 mt-0.5 leading-relaxed">
-                Tourists in stone fortresses and historical zones frequently encounter cellular dead zones. Download this pack once on Wi-Fi to navigate and scan landmarks with 0% data usage.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2 pt-2 border-t border-neutral-800/60 text-xs">
-            <div className="flex items-center gap-2 text-neutral-300">
-              <span className="text-base shrink-0">📸</span>
-              <span><strong>Visual Landmark AI (120 MB):</strong> On-device CLIP vision model identifies Manila Cathedral, Fort Santiago & San Agustin Church.</span>
-            </div>
-            <div className="flex items-center gap-2 text-neutral-300">
-              <span className="text-base shrink-0">🗺️</span>
-              <span><strong>Offline Street Maps (4 MB):</strong> High-detail street tiles for Intramuros and Makati.</span>
-            </div>
-            <div className="flex items-center gap-2 text-neutral-300">
-              <span className="text-base shrink-0">🧭</span>
-              <span><strong>Point-and-Discover AR:</strong> Spatial compass ribbon guides you straight to targets with 0 cloud latency.</span>
-            </div>
-          </div>
-        </section>
-
-        {/* PRIMARY DOWNLOAD / STATUS CARD */}
-        <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 mb-4 space-y-3">
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-neutral-400 font-medium">Pack Status</span>
-            <span suppressHydrationWarning className={`font-semibold px-2 py-0.5 rounded-full text-[11px] ${
-              isPackInstalled 
-                ? "bg-emerald-950 text-emerald-400 border border-emerald-500/30" 
-                : "bg-amber-950 text-amber-300 border border-amber-500/30"
-            }`}>
-              {isPackInstalled ? "Installed & Ready" : "Not Downloaded (~125 MB)"}
+        {/* ASSETS SUMMARY CARD */}
+        <section className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 mb-4">
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-xs font-semibold text-white">Local Cache Assets</h2>
+            <span suppressHydrationWarning className="text-[11px] font-mono text-neutral-400">
+              {storageInfo.usedMb} MB / {storageInfo.quotaMb || 10240} MB
             </span>
           </div>
 
-          {/* Download Button */}
+          <ul className="space-y-2 text-xs text-neutral-300">
+            <li className="flex items-start gap-2.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
+              <span><strong>Vision model:</strong> Quantized CLIP neural network for on-device landmark recognition</span>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
+              <span><strong>Reference embeddings:</strong> 14 heritage landmark photo vectors</span>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
+              <span><strong>Map tiles:</strong> Intramuros & Makati demo area zoom tiles (14–17)</span>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
+              <span><strong>App shell:</strong> Offline recovery pages and static assets</span>
+            </li>
+          </ul>
+        </section>
+
+        {/* SYNC ACTION CARD */}
+        <section className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 mb-4 space-y-3">
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-neutral-400">Sync status</span>
+            <span suppressHydrationWarning className={`font-semibold flex items-center gap-1.5 text-xs ${
+              isPackInstalled ? "text-emerald-400" : "text-red-400"
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${isPackInstalled ? "bg-emerald-400 shadow-[0_0_6px_#10b981]" : "bg-red-500 shadow-[0_0_6px_#ef4444]"}`} />
+              <span>{isPackInstalled ? "Offline Synced" : "Offline Not Synced"}</span>
+            </span>
+          </div>
+
+          {/* Sync Button */}
           <button
             onClick={handlePrepare}
             disabled={!(mounted ? isOnline : true) || isPreparing}
-            className={`w-full h-12 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md ${
+            className={`w-full h-11 rounded-xl font-medium text-xs transition-all flex items-center justify-center gap-2 shadow-sm ${
               !(mounted ? isOnline : true)
                 ? "bg-neutral-800 text-neutral-500 cursor-not-allowed"
                 : isPreparing
-                  ? "bg-blue-600/60 text-white cursor-wait animate-pulse"
+                  ? "bg-blue-600/60 text-white cursor-wait"
                   : isPackInstalled
-                    ? "bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 active:scale-[0.98]"
-                    : "bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]"
+                    ? "bg-neutral-800 hover:bg-neutral-750 text-neutral-200 border border-neutral-700 active:bg-neutral-700"
+                    : "bg-[#3b82f6] hover:bg-blue-600 text-white active:bg-blue-700"
             }`}
           >
             {isPreparing ? (
               <>
-                <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                <span>Downloading Heritage Pack...</span>
+                <span>Syncing offline data...</span>
               </>
             ) : isPackInstalled ? (
-              <>
-                <span>🔄</span>
-                <span>Update / Re-download Heritage Pack</span>
-              </>
+              <span>Re-sync offline data</span>
             ) : (
-              <>
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                <span>Download Offline Pack (125 MB)</span>
-              </>
+              <span>Sync for offline use</span>
             )}
           </button>
 
           {mounted && !isOnline && (
             <p className="text-amber-400 text-xs text-center font-medium">
-              Connect to Wi-Fi once to download or update the offline pack.
+              Connect to Wi-Fi to sync offline assets.
             </p>
           )}
 
-          {/* PROGRESS ROWS (VISIBLE DURING/AFTER DOWNLOAD) */}
+          {/* PROGRESS ROWS (VISIBLE DURING/AFTER SYNC) */}
           {(isPreparing || prepSummary) && (
-            <div className="bg-neutral-950/80 border border-neutral-800 rounded-xl p-3 space-y-2.5 text-xs mt-3">
-              {/* Step 1: Pages */}
+            <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 space-y-2 text-xs mt-3">
               <div>
-                <div className="flex justify-between text-neutral-300 font-medium mb-1">
-                  <span>1. App Shell & Screens</span>
-                  <span>{step1Progress.count} / {step1Progress.total}</span>
+                <div className="flex justify-between text-neutral-300 mb-0.5">
+                  <span>App shell</span>
+                  <span className="font-mono text-neutral-400">{step1Progress.count}/{step1Progress.total}</span>
                 </div>
                 <p className="text-neutral-500 text-[11px] truncate">{step1Progress.label}</p>
                 {step1Progress.err && <p className="text-red-400 text-[11px]">{step1Progress.err}</p>}
               </div>
 
-              {/* Step 2: Images */}
               <div>
-                <div className="flex justify-between text-neutral-300 font-medium mb-1">
-                  <span>2. Heritage Reference Photos</span>
-                  <span>{step2Progress.count} photos</span>
+                <div className="flex justify-between text-neutral-300 mb-0.5">
+                  <span>Reference photos</span>
+                  <span className="font-mono text-neutral-400">{step2Progress.count}</span>
                 </div>
                 <p className="text-neutral-500 text-[11px] truncate">{step2Progress.label}</p>
                 {step2Progress.err && <p className="text-red-400 text-[11px]">{step2Progress.err}</p>}
               </div>
 
-              {/* Step 3: AI Model */}
               <div>
-                <div className="flex justify-between text-neutral-300 font-medium mb-1">
-                  <span>3. On-Device Vision Model</span>
-                  <span>{step3Progress.done ? "Ready" : "..."}</span>
+                <div className="flex justify-between text-neutral-300 mb-0.5">
+                  <span>Vision model</span>
+                  <span className="font-mono text-neutral-400">{step3Progress.done ? "Ready" : "..."}</span>
                 </div>
                 <p className="text-neutral-500 text-[11px] truncate">{step3Progress.label}</p>
                 {step3Progress.err && <p className="text-red-400 text-[11px]">{step3Progress.err}</p>}
               </div>
 
-              {/* Step 4: Map Tiles */}
               <div>
-                <div className="flex justify-between text-neutral-300 font-medium mb-1">
-                  <span>4. Offline Street Map Tiles</span>
-                  <span>{step4Progress.count} tiles</span>
+                <div className="flex justify-between text-neutral-300 mb-0.5">
+                  <span>Map tiles</span>
+                  <span className="font-mono text-neutral-400">{step4Progress.count}</span>
                 </div>
                 <p className="text-neutral-500 text-[11px] truncate">{step4Progress.label}</p>
                 {step4Progress.err && <p className="text-red-400 text-[11px]">{step4Progress.err}</p>}
@@ -354,23 +338,19 @@ export default function OfflineSetupPage() {
           )}
 
           {prepSummary && (
-            <div className="p-2.5 bg-emerald-950/50 border border-emerald-500/30 text-emerald-300 text-xs rounded-xl flex items-center gap-2">
-              <span className="text-base">✅</span>
-              <span>{prepSummary}</span>
+            <div className="p-2.5 bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs rounded-lg">
+              {prepSummary}
             </div>
           )}
         </section>
 
-        {/* AIRPLANE MODE INSTRUCTIONS FOR TOURISTS & JUDGES */}
-        <section className="bg-neutral-900/70 border border-neutral-800 rounded-2xl p-4 mb-4 text-xs space-y-2">
-          <div className="flex items-center gap-2 font-bold text-white text-sm">
-            <span>✈️</span>
-            <span>How to Test in Airplane Mode</span>
-          </div>
-          <ol className="list-decimal list-inside space-y-1 text-neutral-300 leading-relaxed pl-1">
-            <li>Download the offline pack above while connected to Wi-Fi.</li>
-            <li>Turn <strong>Airplane Mode ON</strong> (turn Wi-Fi and Cellular data off).</li>
-            <li>Force close and reopen the app — the map, camera scanner, and AR navigation run 100% locally.</li>
+        {/* AIRPLANE MODE INSTRUCTIONS */}
+        <section className="bg-neutral-900 border border-neutral-800 rounded-xl p-3.5 mb-4 text-xs space-y-1.5">
+          <div className="font-medium text-neutral-200">Testing offline mode:</div>
+          <ol className="list-decimal list-inside space-y-1 text-neutral-400 leading-relaxed pl-1 text-[11px]">
+            <li>Sync assets while online.</li>
+            <li>Enable Airplane Mode (disable Wi-Fi and Cellular).</li>
+            <li>Reopen app — camera vision, maps, and AR navigation will run locally.</li>
           </ol>
         </section>
 

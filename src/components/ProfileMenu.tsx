@@ -88,8 +88,8 @@ export default function ProfileMenu({ onClose, onSignOut }: ProfileMenuProps) {
                 </svg>
               </div>
               <div className="flex flex-col">
-                <span className="text-[15px] font-medium text-white">Offline Mode & Data</span>
-                <span className="text-[11px] text-gray-400">Download AI model & demo tiles</span>
+                <span className="text-[15px] font-medium text-white">Offline Sync</span>
+                <span className="text-[11px] text-gray-400">Sync local AI model & map tiles</span>
               </div>
             </div>
             <ChevronRightIcon className="w-5 h-5 text-gray-500" />

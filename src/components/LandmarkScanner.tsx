@@ -246,39 +246,39 @@ export default function LandmarkScanner({ video, arActive }: LandmarkScannerProp
         
         {/* Left Column */}
         <div className="flex flex-col gap-2 items-start max-w-[65%]">
-          {/* Offline Status / Download Pack Button */}
+          {/* Offline Sync Status Badge */}
           <Link
             href="/offline-setup"
             className={`pointer-events-auto backdrop-blur-md rounded-full px-3 py-1.5 flex items-center shadow-md border transition-all active:scale-95 ${
               !isOfflineReady
-                ? "bg-neutral-900/95 border-amber-500/60 text-amber-200 shadow-amber-950/30"
+                ? "bg-black/75 border-red-500/40 text-red-200 shadow-red-950/20"
                 : isOnline
                   ? "bg-black/75 border-emerald-500/40 text-emerald-300 shadow-emerald-950/20"
-                  : "bg-sky-950/90 border-sky-400/50 text-sky-200 shadow-sky-950/30"
+                  : "bg-black/75 border-sky-400/50 text-sky-200 shadow-sky-950/20"
             }`}
             title={
               !isOfflineReady
-                ? "Download map tiles & AI landmark model for offline travel"
+                ? "Tap to sync offline maps and on-device AI"
                 : isOnline
-                  ? "Offline maps and on-device AI are saved on this phone"
-                  : "Running 100% on-device with zero internet data"
+                  ? "Offline assets synced to device"
+                  : "Running 100% on-device (offline)"
             }
           >
-            {!isOfflineReady ? (
-              <svg className="w-3.5 h-3.5 mr-1.5 shrink-0 text-amber-300 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            ) : isOnline ? (
-              <span className="w-2 h-2 rounded-full mr-2 shrink-0 bg-emerald-400 animate-pulse shadow-[0_0_6px_#10b981]" />
-            ) : (
-              <span className="text-xs mr-1.5 shrink-0">✈️</span>
-            )}
+            <span
+              className={`w-2 h-2 rounded-full mr-2 shrink-0 ${
+                !isOfflineReady
+                  ? "bg-red-500 shadow-[0_0_6px_#ef4444]"
+                  : isOnline
+                    ? "bg-emerald-400 shadow-[0_0_6px_#10b981]"
+                    : "bg-sky-400 shadow-[0_0_6px_#38bdf8]"
+              }`}
+            />
             <span className="text-[11px] font-semibold whitespace-nowrap">
               {!isOfflineReady
-                ? "Download Offline Pack"
+                ? "Offline Not Sync"
                 : isOnline
-                  ? "Offline Pack Ready"
-                  : "On-Device Mode (Offline)"}
+                  ? "Offline Synced"
+                  : "Offline Mode"}
             </span>
           </Link>
 
