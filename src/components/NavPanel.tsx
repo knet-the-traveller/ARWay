@@ -1,6 +1,4 @@
-import { useState } from "react";
 import { RouteData } from "@/lib/route";
-// Reuse or create a turn arrow icon if needed
 
 interface NavPanelProps {
   destination: { lat: number, lng: number, name: string } | null;
@@ -13,15 +11,14 @@ interface NavPanelProps {
   onRecenter: () => void;
   onClear: () => void;
   remainingDistanceM: number;
-  simulatedWalk: boolean;
-  onToggleSimulate: () => void;
-  onHoldWalk: (held: boolean) => void;
+  realign: boolean;
+  onToggleRealign: () => void;
 }
 
 export default function NavPanel({ 
   destination, routeData, routeLoading, routeError, 
   arActive, onStartAr, onStopAr, onRecenter, onClear, 
-  remainingDistanceM, simulatedWalk, onToggleSimulate, onHoldWalk 
+  remainingDistanceM, realign, onToggleRealign 
 }: NavPanelProps) {
 
   if (!destination) {
@@ -84,7 +81,7 @@ export default function NavPanel({
     const sourceColor = routeData.source === "straight" ? "bg-red-500/20 text-red-400" : "bg-gray-800 text-gray-300";
 
     return (
-      <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-3 max-h-[140px]">
+      <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-3 max-h-[130px]">
         <div className="flex justify-between items-start">
           <div className="flex-1 min-w-0 pr-2">
             <h3 className="text-[17px] font-semibold truncate leading-tight">{destination.name}</h3>
@@ -101,20 +98,10 @@ export default function NavPanel({
           </div>
           
           <div className="flex flex-col gap-1 flex-shrink-0">
-            <label className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded">
-              <input type="checkbox" checked={simulatedWalk} onChange={onToggleSimulate} className="w-3 h-3 accent-blue-500" />
-              Demo mode
+            <label className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded h-[44px] cursor-pointer active:bg-black/60">
+              <input type="checkbox" checked={realign} onChange={onToggleRealign} className="w-3 h-3 accent-blue-500" />
+              Realign
             </label>
-            {simulatedWalk && (
-              <button 
-                onPointerDown={() => onHoldWalk(true)} 
-                onPointerUp={() => onHoldWalk(false)}
-                onPointerLeave={() => onHoldWalk(false)}
-                className="bg-blue-600/30 text-blue-300 rounded text-xs py-1 h-[24px] font-semibold select-none active:bg-blue-600 active:text-white transition-colors"
-              >
-                Hold to Walk
-              </button>
-            )}
           </div>
         </div>
 

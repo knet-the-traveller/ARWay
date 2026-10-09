@@ -10,7 +10,7 @@ import ArOverlay from "@/components/ArOverlay";
 import NavPanel from "@/components/NavPanel";
 import { fetchWalkingRoute, RouteData } from "@/lib/route";
 import { useHeading } from "@/hooks/useHeading";
-import { LatLng, remainingDistanceM as getRemainingDistance, snapToRoute, haversineDistanceM, bearingDeg, offsetLatLng } from "@/lib/geo";
+import { LatLng, remainingDistanceM as getRemainingDistance, snapToRoute, haversineDistanceM, bearingDeg } from "@/lib/geo";
 
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
@@ -29,9 +29,28 @@ function MapsContent() {
   const [arActive, setArActive] = useState(false);
   const { heading, pitch, requestPermission, calibrationOffset, setCalibrationOffset } = useHeading();
   
-  const [simulatedWalk, setSimulatedWalk] = useState(false);
-  const [simulatedDist, setSimulatedDist] = useState(0);
-  const [holdingWalk, setHoldingWalk] = useState(false);
+  const [realign, setRealign] = useState(true);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("arway_realign");
+        if (stored !== null) {
+          setRealign(stored === "1");
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  const handleToggleRealign = () => {
+    const next = !realign;
+    setRealign(next);
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("arway_realign", next ? "1" : "0");
+      }
+    } catch (e) {}
+  };
 
   const routeOffPathTimer = useRef<any>(null);
 
@@ -49,25 +68,7 @@ function MapsContent() {
   
   const destination = customDestination || queryDestination;
 
-  const effectivePosition = useMemo(() => {
-    if (simulatedWalk && routeData && routeData.coords.length > 0) {
-      // Simulate position along route
-      let rem = simulatedDist;
-      let pos = routeData.coords[0];
-      for (let i = 0; i < routeData.coords.length - 1; i++) {
-        const d = haversineDistanceM(routeData.coords[i], routeData.coords[i+1]);
-        if (rem > d) {
-          rem -= d;
-          pos = routeData.coords[i+1];
-        } else {
-          pos = offsetLatLng(routeData.coords[i], bearingDeg(routeData.coords[i], routeData.coords[i+1]), rem);
-          break;
-        }
-      }
-      return pos;
-    }
-    return position;
-  }, [position, simulatedWalk, simulatedDist, routeData]);
+  const effectivePosition = position; // always use real position
 
   const remainingDist = useMemo(() => {
     if (!routeData || !effectivePosition) return 0;
@@ -78,14 +79,13 @@ function MapsContent() {
   useEffect(() => {
     let active = true;
     const getRoute = async () => {
-      if (!destination || !position) return;
+      if (!destination || !effectivePosition) return;
       setRouteLoading(true);
       setRouteError(false);
       try {
-        const data = await fetchWalkingRoute(position, destination);
+        const data = await fetchWalkingRoute(effectivePosition, destination);
         if (active) {
           setRouteData(data);
-          setSimulatedDist(0);
         }
       } catch (e) {
         if (active) setRouteError(true);
@@ -102,13 +102,13 @@ function MapsContent() {
 
   useEffect(() => {
     // Off route check
-    if (!simulatedWalk && routeData && position && routeData.source === "network" && destination) {
-      const snapped = snapToRoute(routeData.coords, position);
+    if (routeData && effectivePosition && routeData.source === "network" && destination) {
+      const snapped = snapToRoute(routeData.coords, effectivePosition);
       if (snapped.distanceFromRouteM > 30) {
         if (!routeOffPathTimer.current) {
           routeOffPathTimer.current = setTimeout(() => {
             // Reroute
-            fetchWalkingRoute(position, destination).then(data => setRouteData(data)).catch(() => {});
+            fetchWalkingRoute(effectivePosition, destination).then(data => setRouteData(data)).catch(() => {});
             routeOffPathTimer.current = null;
           }, 5000);
         }
@@ -122,16 +122,7 @@ function MapsContent() {
     return () => {
       if (routeOffPathTimer.current) clearTimeout(routeOffPathTimer.current);
     };
-  }, [position, routeData, simulatedWalk, destination]);
-
-  useEffect(() => {
-    if (simulatedWalk && holdingWalk) {
-      const interval = setInterval(() => {
-        setSimulatedDist(d => d + 1.4 / 10); // 1.4 m/s at 100ms intervals
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [simulatedWalk, holdingWalk]);
+  }, [effectivePosition, routeData, destination]);
 
   const handleStartAr = async () => {
     await requestPermission();
@@ -177,27 +168,22 @@ function MapsContent() {
         </div>
       </div>
       
-      {simulatedWalk && (
-        <div className="absolute top-10 left-0 w-full z-50 pointer-events-none flex justify-center">
-          <div className="bg-red-600 text-white text-xs px-2 py-0.5 font-bold tracking-widest rounded shadow-md animate-pulse">SIMULATED</div>
-        </div>
-      )}
-
       {/* TOP: CAMERA */}
       <div className="w-full h-[55%] relative">
         <CameraView onVideoReady={setVideoEl} />
         {arActive && (
           <ArOverlay 
             active={arActive}
-            accuracy={simulatedWalk ? 5 : accuracy}
+            accuracy={accuracy}
             destination={destination}
             heading={heading}
             pitch={pitch}
             position={effectivePosition}
             route={routeData?.coords || null}
+            realign={realign}
           />
         )}
-        <LandmarkScanner video={videoEl} />
+        <LandmarkScanner video={videoEl} arActive={arActive} />
       </div>
 
       {/* DIVIDER */}
@@ -223,9 +209,8 @@ function MapsContent() {
           onRecenter={handleRecenter}
           onClear={handleClear}
           remainingDistanceM={remainingDist}
-          simulatedWalk={simulatedWalk}
-          onToggleSimulate={() => setSimulatedWalk(!simulatedWalk)}
-          onHoldWalk={setHoldingWalk}
+          realign={realign}
+          onToggleRealign={handleToggleRealign}
         />
       </div>
     </main>

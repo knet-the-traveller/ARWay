@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { LatLng, haversineDistanceM, bearingDeg, normalizeAngle, snapToRoute, sliceAhead, offsetLatLng } from "@/lib/geo";
+import { useEffect, useRef, useState } from "react";
+import { LatLng, haversineDistanceM, bearingDeg, normalizeAngle, snapToRoute, sliceAhead, offsetLatLng, lateralOffsetMeters } from "@/lib/geo";
 
 interface ArOverlayProps {
   route: LatLng[] | null;
@@ -9,6 +9,7 @@ interface ArOverlayProps {
   pitch: number;
   active: boolean;
   destination: { lat: number, lng: number, name: string } | null;
+  realign?: boolean;
 }
 
 const CAMERA_HFOV_DEG = 62;
@@ -22,8 +23,10 @@ const TURN_AROUND_DEG = 120;
 const ON_ROUTE_DEG = 15;
 const HEADING_HOLD_MS = 3000;
 const POSITION_HOLD_MS = 5000;
+const MAX_REALIGN_OFFSET_M = 12;
+const REALIGN_SMOOTHING = 0.1;
 
-export default function ArOverlay({ route, position, accuracy, heading, pitch, active, destination }: ArOverlayProps) {
+export default function ArOverlay({ route, position, accuracy, heading, pitch, active, destination, realign = true }: ArOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudBadgeRef = useRef<HTMLDivElement>(null);
   const hudLabelRef = useRef<HTMLDivElement>(null);
@@ -35,10 +38,41 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
   const routeRef = useRef(route);
   const destinationRef = useRef(destination);
   const pitchRef = useRef(pitch);
+  const realignRef = useRef(realign);
   
   const sCosRef = useRef(1);
   const sSinRef = useRef(0);
   const canvasClearedRef = useRef(true);
+
+  const offsetEastRef = useRef(0);
+  const offsetNorthRef = useRef(0);
+
+  const [showSafety, setShowSafety] = useState(false);
+  const [safetyOpacity, setSafetyOpacity] = useState(0);
+
+  useEffect(() => {
+    if (active) {
+      setShowSafety(true);
+      // Wait a frame to trigger the transition
+      requestAnimationFrame(() => setSafetyOpacity(1));
+      
+      const fadeTimer = setTimeout(() => {
+        setSafetyOpacity(0);
+      }, 4500); // Start fading out before 5s
+      
+      const unmountTimer = setTimeout(() => {
+        setShowSafety(false);
+      }, 5500);
+      
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(unmountTimer);
+      };
+    } else {
+      setShowSafety(false);
+      setSafetyOpacity(0);
+    }
+  }, [active]);
 
   useEffect(() => {
     if (heading !== null) lastHeadingRef.current = { val: heading, time: Date.now() };
@@ -47,7 +81,8 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
     routeRef.current = route;
     destinationRef.current = destination;
     pitchRef.current = pitch;
-  }, [heading, position, accuracy, route, destination, pitch]);
+    realignRef.current = realign;
+  }, [heading, position, accuracy, route, destination, pitch, realign]);
 
   useEffect(() => {
     if (!active) {
@@ -101,11 +136,12 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
       const currentDest = destinationRef.current;
       const currentPitch = pitchRef.current;
       const currentAcc = lastAccuracyRef.current;
+      const currentRealign = realignRef.current;
       
       const width = canvas.width;
       const height = canvas.height;
 
-      // Update HUD
+      // Update HUD visibility
       if (hudBadgeRef.current && hudLabelRef.current && hudArrowRef.current) {
         if (!currentHeading || !currentPos || !currentRoute || currentRoute.length === 0) {
           hudBadgeRef.current.style.display = "none";
@@ -133,15 +169,49 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
         if (currentHeading === null) return;
 
         const snapped = snapToRoute(currentRoute, currentPos);
-        const path = sliceAhead(currentRoute, snapped, LOOKAHEAD_M);
-        if (path.length < 2) return;
+        const rawPath = sliceAhead(currentRoute, snapped, LOOKAHEAD_M);
+        if (rawPath.length < 2) return;
 
-        // Ensure continuity if off route
-        if (snapped.distanceFromRouteM > 1.0) {
-           path.unshift(currentPos);
+        // Realign logic
+        let targetEast = 0;
+        let targetNorth = 0;
+
+        if (currentRealign && snapped.distanceFromRouteM <= MAX_REALIGN_OFFSET_M) {
+          if (currentAcc !== null && currentAcc <= MAX_ACCURACY_M) {
+            const latOff = lateralOffsetMeters(snapped.snappedPoint, currentPos);
+            targetEast = latOff.east;
+            targetNorth = latOff.north;
+          } else {
+            // freeze last valid offset during weak GPS
+            targetEast = offsetEastRef.current;
+            targetNorth = offsetNorthRef.current;
+          }
         }
 
-        // Calculate steering S
+        offsetEastRef.current = offsetEastRef.current * (1 - REALIGN_SMOOTHING) + targetEast * REALIGN_SMOOTHING;
+        offsetNorthRef.current = offsetNorthRef.current * (1 - REALIGN_SMOOTHING) + targetNorth * REALIGN_SMOOTHING;
+
+        const R = 6371e3;
+        const latMid = currentPos.lat * Math.PI / 180;
+        const dLat = (offsetNorthRef.current / R) * 180 / Math.PI;
+        const dLon = (offsetEastRef.current / (R * Math.cos(latMid))) * 180 / Math.PI;
+
+        const isActivelyRealigned = Math.abs(offsetEastRef.current) > 0.05 || Math.abs(offsetNorthRef.current) > 0.05;
+
+        let path = rawPath;
+        if (isActivelyRealigned) {
+          path = rawPath.map(p => ({
+            lat: p.lat + dLat,
+            lng: p.lng + dLon
+          }));
+        } else {
+          // If not realigned, ensure continuity by drawing from current pos if off route
+          if (snapped.distanceFromRouteM > 1.0) {
+            path = [currentPos, ...rawPath];
+          }
+        }
+
+        // Calculate steering S from the shifted path
         let guidePt = path[0];
         let dAccum = 0;
         for (let i = 0; i < path.length; i++) {
@@ -153,9 +223,9 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
         }
         
         const rawS = normalizeAngle(bearingDeg(currentPos, guidePt) - currentHeading);
-        const alpha = 0.2;
-        sCosRef.current = sCosRef.current * (1 - alpha) + Math.cos(rawS * Math.PI / 180) * alpha;
-        sSinRef.current = sSinRef.current * (1 - alpha) + Math.sin(rawS * Math.PI / 180) * alpha;
+        const alphaFilter = 0.2;
+        sCosRef.current = sCosRef.current * (1 - alphaFilter) + Math.cos(rawS * Math.PI / 180) * alphaFilter;
+        sSinRef.current = sSinRef.current * (1 - alphaFilter) + Math.sin(rawS * Math.PI / 180) * alphaFilter;
         
         let S = Math.atan2(sSinRef.current, sCosRef.current) * 180 / Math.PI;
         
@@ -371,6 +441,14 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
         className="absolute inset-0 w-full h-full" 
         style={{ opacity: active ? 1 : 0 }} 
       />
+      {showSafety && (
+        <div 
+          className="absolute top-12 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white text-[12px] px-4 py-1.5 rounded-full shadow-md z-20 transition-opacity duration-1000 whitespace-nowrap max-w-[80%] text-center pointer-events-none"
+          style={{ opacity: safetyOpacity }}
+        >
+          Stay on the sidewalk. Watch for traffic.
+        </div>
+      )}
       {active && (
         <div className="absolute bottom-6 left-0 right-0 flex flex-col items-center justify-end pointer-events-none pb-4">
           <div 
