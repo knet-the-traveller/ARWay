@@ -3,7 +3,6 @@
 
 import { sceneries } from "./sceneries";
 import { shops } from "./shops";
-import { getPosts } from "./posts";
 
 // 1. Routes to pre-cache in arway-pages
 export const ROUTES_TO_CACHE: string[] = [
@@ -59,14 +58,31 @@ export function getImageSources(): string[] {
   }
 
   // Posts images
-  try {
-    const posts = getPosts();
-    for (const post of posts) {
-      if (post.image && (post.image.startsWith("/sceneries/") || post.image.startsWith("/shops/"))) {
-        images.add(post.image);
+  if (typeof window !== "undefined") {
+    try {
+      const data = localStorage.getItem("arway_posts");
+      if (data) {
+        const posts = JSON.parse(data);
+        if (Array.isArray(posts)) {
+          for (const post of posts) {
+            if (post.image && (post.image.startsWith("/sceneries/") || post.image.startsWith("/shops/"))) {
+              images.add(post.image);
+            }
+          }
+        }
       }
-    }
-  } catch (e) {}
+    } catch (e) { }
+  }
+
+  // Seed post images defined in posts.ts
+  const seedPostImages = [
+    "/sceneries/Luneta.jpg",
+    "/sceneries/Intramuros.jpg",
+    "/sceneries/Fort-Santiago-Intramuros.avif",
+    "/sceneries/Dolomite-Beach.jpg",
+    "/sceneries/Ayala-Triangle.jpg"
+  ];
+  seedPostImages.forEach((img) => images.add(img));
 
   return Array.from(images);
 }
