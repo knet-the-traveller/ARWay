@@ -226,20 +226,20 @@ export default function ProfileMenu({ onClose, onSignOut }: ProfileMenuProps) {
 
                   <div className="bg-white/5 rounded-xl p-3 border border-white/5 space-y-2">
                     <div>
-                      <span className="text-neutral-400 block text-[10px]">ORGANIZATION / TEAM</span>
-                      <span className="text-white font-medium">PointVoid0 / Sector 4</span>
+                      <span className="text-neutral-400 block text-[10px]">TEAM</span>
+                      <span className="text-white font-medium">Sector 4</span>
                     </div>
                     <div>
-                      <span className="text-neutral-400 block text-[10px]">EVENT & TRACK</span>
+                      <span className="text-neutral-400 block text-[10px]">EVENT &amp; TRACK</span>
                       <span className="text-white font-medium">AppBuildersPH 2026 — Local AI Track</span>
                     </div>
                     <div>
-                      <span className="text-neutral-400 block text-[10px]">SUPPORT EMAIL</span>
-                      <a href="mailto:support@arway.ph" className="text-blue-400 underline font-medium">support@arway.ph</a>
+                      <span className="text-neutral-400 block text-[10px]">TEAM LEAD / DEVELOPER EMAIL</span>
+                      <a href="mailto:markkennethbgalario@gmail.com" className="text-blue-400 underline font-medium break-all">markkennethbgalario@gmail.com</a>
                     </div>
                     <div>
-                      <span className="text-neutral-400 block text-[10px]">GITHUB REPOSITORY</span>
-                      <a href="https://github.com/PointVoid0/Sector4" target="_blank" rel="noreferrer" className="text-blue-400 underline font-medium">github.com/PointVoid0/Sector4</a>
+                      <span className="text-neutral-400 block text-[10px]">GITHUB (TEAM LEAD)</span>
+                      <a href="https://github.com/knet-the-traveller" target="_blank" rel="noreferrer" className="text-blue-400 underline font-medium">github.com/knet-the-traveller</a>
                     </div>
                   </div>
 

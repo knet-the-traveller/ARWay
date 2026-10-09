@@ -136,9 +136,9 @@ export default function PrivacyPolicyPage() {
             For inquiries regarding privacy, data protection, or open-source compliance, reach out to the development team:
           </p>
           <div className="bg-white/5 p-3 rounded-xl border border-white/5 text-[11px] space-y-1 text-neutral-300">
-            <div><strong className="text-white">Organization:</strong> PointVoid0 / Sector 4 (AppBuildersPH 2026)</div>
-            <div><strong className="text-white">Email:</strong> <a href="mailto:support@arway.ph" className="text-blue-400 underline">support@arway.ph</a></div>
-            <div><strong className="text-white">Repository:</strong> <a href="https://github.com/PointVoid0/Sector4" target="_blank" rel="noreferrer" className="text-blue-400 underline">PointVoid0/Sector4</a></div>
+            <div><strong className="text-white">Team:</strong> Sector 4 (AppBuildersPH 2026)</div>
+            <div><strong className="text-white">Developer Email:</strong> <a href="mailto:markkennethbgalario@gmail.com" className="text-blue-400 underline">markkennethbgalario@gmail.com</a></div>
+            <div><strong className="text-white">Team Lead GitHub:</strong> <a href="https://github.com/knet-the-traveller" target="_blank" rel="noreferrer" className="text-blue-400 underline">github.com/knet-the-traveller</a></div>
           </div>
         </section>
       </div>

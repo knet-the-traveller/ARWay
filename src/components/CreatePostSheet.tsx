@@ -284,6 +284,9 @@ export default function CreatePostSheet({ onClose, onSuccess }: CreatePostSheetP
           >
             {loading ? "Posting..." : "Post"}
           </button>
+          <p className="text-neutral-500 text-[10px] mt-2 text-center">
+            Photos and landmark pins are saved 100% locally on this device in this version.
+          </p>
         </div>
       </div>
     </>
