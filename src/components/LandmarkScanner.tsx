@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useOnlineStatus } from "@/lib/offline";
 import { 
   loadRecognizer, 
   prepareReferences, 
@@ -19,6 +21,18 @@ interface LandmarkScannerProps {
 
 export default function LandmarkScanner({ video, arActive }: LandmarkScannerProps) {
   const router = useRouter();
+  const isOnline = useOnlineStatus();
+  const [isOfflineReady, setIsOfflineReady] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const ready = localStorage.getItem("arway_offline_ready");
+        setIsOfflineReady(!!ready);
+      }
+    } catch (e) {}
+  }, []);
+
   const [isScanning, setIsScanning] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<"idle" | "model" | "references" | "done" | "error">("idle");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -231,7 +245,29 @@ export default function LandmarkScanner({ video, arActive }: LandmarkScannerProp
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-30 pointer-events-none">
         
         {/* Left Column */}
-        <div className="flex flex-col gap-2 items-start w-[30%]">
+        <div className="flex flex-col gap-2 items-start max-w-[45%]">
+          {/* Offline Status / Prepare Button */}
+          <Link
+            href="/offline-setup"
+            className={`pointer-events-auto backdrop-blur-md rounded-full px-2.5 py-1.5 flex items-center shadow-md border transition-all active:scale-95 ${
+              isOfflineReady
+                ? "bg-black/70 border-emerald-500/30 text-white"
+                : "bg-blue-600/90 border-blue-400/30 text-white animate-pulse"
+            }`}
+            title="Offline Maps & AI Setup"
+          >
+            {isOfflineReady ? (
+              <span className={`w-2 h-2 rounded-full mr-1.5 shrink-0 ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-sky-400"}`} />
+            ) : (
+              <svg className="w-3.5 h-3.5 mr-1.5 shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            )}
+            <span className="text-[11px] font-semibold whitespace-nowrap">
+              {isOfflineReady ? (isOnline ? "Offline Ready" : "Airplane Mode") : "Prepare Offline"}
+            </span>
+          </Link>
+
           {/* Privacy Badge */}
           {isScanning && (
             <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center shadow-sm">

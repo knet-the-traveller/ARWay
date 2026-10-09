@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   useOnlineStatus,
   warmPages,
@@ -192,7 +193,18 @@ export default function OfflineSetupPage() {
       <div className="flex-1 min-h-0 overflow-y-auto p-4 font-sans max-w-[420px] w-full mx-auto pb-24 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {/* HEADER */}
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-bold text-white tracking-tight">Offline setup</h1>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/maps"
+              className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-300 hover:text-white active:bg-neutral-800 transition-colors shrink-0"
+              title="Back to Maps"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <h1 className="text-xl font-bold text-white tracking-tight">Offline setup</h1>
+          </div>
           <div suppressHydrationWarning className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${
             (mounted ? isOnline : true) ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30" : "bg-amber-950/80 text-amber-400 border border-amber-500/30"
           }`}>
