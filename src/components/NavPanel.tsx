@@ -1,6 +1,5 @@
-import { useState } from "react";
 import { RouteData } from "@/lib/route";
-// Reuse or create a turn arrow icon if needed
+import { useEffect, useState } from "react";
 
 interface NavPanelProps {
   destination: { lat: number, lng: number, name: string } | null;
@@ -13,21 +12,48 @@ interface NavPanelProps {
   onRecenter: () => void;
   onClear: () => void;
   remainingDistanceM: number;
-  simulatedWalk: boolean;
-  onToggleSimulate: () => void;
-  onHoldWalk: (held: boolean) => void;
+  realign: boolean;
+  onToggleRealign: () => void;
+  compact?: boolean;
 }
 
 export default function NavPanel({ 
   destination, routeData, routeLoading, routeError, 
   arActive, onStartAr, onStopAr, onRecenter, onClear, 
-  remainingDistanceM, simulatedWalk, onToggleSimulate, onHoldWalk 
+  remainingDistanceM, realign, onToggleRealign, compact = false
 }: NavPanelProps) {
 
+  const [showHint, setShowHint] = useState(true);
+  const [hintOpacity, setHintOpacity] = useState(1);
+
+  useEffect(() => {
+    if (!destination) {
+      setShowHint(true);
+      setHintOpacity(1);
+      
+      const fadeTimer = setTimeout(() => {
+        setHintOpacity(0);
+      }, 3000);
+      
+      const hideTimer = setTimeout(() => {
+        setShowHint(false);
+      }, 3300);
+      
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(hideTimer);
+      };
+    }
+  }, [destination]);
+
   if (!destination) {
+    if (!showHint) return null;
     return (
-      <div className="absolute bottom-16 left-4 right-4 bg-[#1c1c1e] text-white p-4 rounded-2xl shadow-xl z-20 pointer-events-auto">
-        <p className="text-[14px] text-gray-300 text-center">Pick a place from Sceneries, Shop, or Home, or tap the map</p>
+      <div 
+        className="absolute bottom-16 left-4 right-4 bg-[#1c1c1e] text-white p-4 rounded-2xl shadow-xl z-20 pointer-events-none transition-opacity duration-300"
+        style={{ opacity: hintOpacity }}
+      >
+        <p className="text-[14px] text-gray-300 text-center">Search above, pick a place from Sceneries, Shop, or Home, or tap the map.</p>
       </div>
     );
   }
@@ -83,8 +109,39 @@ export default function NavPanel({
                       : "Direct line only";
     const sourceColor = routeData.source === "straight" ? "bg-red-500/20 text-red-400" : "bg-gray-800 text-gray-300";
 
+    if (compact) {
+      return (
+        <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-2 max-h-[84px]">
+          <div className="flex justify-between items-center">
+            <h3 className="text-[15px] font-semibold truncate flex-1 min-w-0 pr-2">{destination.name}</h3>
+            <div className="flex items-center text-[12px] text-gray-300 flex-shrink-0 gap-1.5">
+              <span className="font-medium text-white">{distText}</span>
+              <span>&middot;</span>
+              <span>{etaMins} min</span>
+            </div>
+          </div>
+  
+          <div className="flex gap-2 h-[44px]">
+            {arActive ? (
+              <button onClick={onStopAr} className="flex-1 bg-red-500 text-white font-semibold rounded-xl active:bg-red-600 transition-colors text-sm">Stop</button>
+            ) : (
+              <button onClick={onStartAr} className="flex-1 bg-blue-500 text-white font-semibold rounded-xl active:bg-blue-600 transition-colors text-sm">Start AR</button>
+            )}
+            {arActive && (
+              <button onClick={onRecenter} className="px-3 bg-gray-700 text-white font-semibold rounded-xl active:bg-gray-600 transition-colors text-xs">Recenter</button>
+            )}
+            <button onClick={onClear} className="px-3 bg-gray-800 text-gray-300 font-semibold rounded-xl active:bg-gray-700 transition-colors text-xs">Clear</button>
+            <label className="flex items-center justify-center gap-1.5 text-[10px] text-gray-500 bg-black/40 px-2 rounded-xl h-[44px] cursor-pointer active:bg-black/60 flex-shrink-0">
+              <input type="checkbox" checked={realign} onChange={onToggleRealign} className="w-3 h-3 accent-blue-500" />
+              Realign
+            </label>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-3 max-h-[140px]">
+      <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-3 max-h-[130px]">
         <div className="flex justify-between items-start">
           <div className="flex-1 min-w-0 pr-2">
             <h3 className="text-[17px] font-semibold truncate leading-tight">{destination.name}</h3>
@@ -101,20 +158,10 @@ export default function NavPanel({
           </div>
           
           <div className="flex flex-col gap-1 flex-shrink-0">
-            <label className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded">
-              <input type="checkbox" checked={simulatedWalk} onChange={onToggleSimulate} className="w-3 h-3 accent-blue-500" />
-              Demo mode
+            <label className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded h-[44px] cursor-pointer active:bg-black/60">
+              <input type="checkbox" checked={realign} onChange={onToggleRealign} className="w-3 h-3 accent-blue-500" />
+              Realign
             </label>
-            {simulatedWalk && (
-              <button 
-                onPointerDown={() => onHoldWalk(true)} 
-                onPointerUp={() => onHoldWalk(false)}
-                onPointerLeave={() => onHoldWalk(false)}
-                className="bg-blue-600/30 text-blue-300 rounded text-xs py-1 h-[24px] font-semibold select-none active:bg-blue-600 active:text-white transition-colors"
-              >
-                Hold to Walk
-              </button>
-            )}
           </div>
         </div>
 

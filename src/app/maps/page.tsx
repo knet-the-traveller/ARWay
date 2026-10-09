@@ -10,11 +10,17 @@ import ArOverlay from "@/components/ArOverlay";
 import NavPanel from "@/components/NavPanel";
 import { fetchWalkingRoute, RouteData } from "@/lib/route";
 import { useHeading } from "@/hooks/useHeading";
-import { LatLng, remainingDistanceM as getRemainingDistance, snapToRoute, haversineDistanceM, bearingDeg, offsetLatLng } from "@/lib/geo";
+import { LatLng, remainingDistanceM as getRemainingDistance, snapToRoute, haversineDistanceM, bearingDeg } from "@/lib/geo";
 
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
 });
+
+import PlaceSearch from "@/components/PlaceSearch";
+import SplitHandle from "@/components/SplitHandle";
+
+const MIN_RATIO = 0.30;
+const MAX_RATIO = 0.70;
 
 function MapsContent() {
   const router = useRouter();
@@ -29,9 +35,87 @@ function MapsContent() {
   const [arActive, setArActive] = useState(false);
   const { heading, pitch, requestPermission, calibrationOffset, setCalibrationOffset } = useHeading();
   
-  const [simulatedWalk, setSimulatedWalk] = useState(false);
-  const [simulatedDist, setSimulatedDist] = useState(0);
-  const [holdingWalk, setHoldingWalk] = useState(false);
+  const [realign, setRealign] = useState(true);
+
+  // Split layout state
+  const [cameraRatio, setCameraRatio] = useState(0.55);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [compactNav, setCompactNav] = useState(false);
+  const lastResizeEventTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const storedRealign = localStorage.getItem("arway_realign");
+        if (storedRealign !== null) {
+          setRealign(storedRealign === "1");
+        }
+        
+        const storedRatio = localStorage.getItem("arway_split_ratio");
+        if (storedRatio !== null) {
+          let r = parseFloat(storedRatio);
+          if (r >= MIN_RATIO && r <= MAX_RATIO) {
+            setCameraRatio(r);
+          }
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setCompactNav(entry.contentRect.height < 300);
+      }
+    });
+    ro.observe(mapContainerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const triggerMapResize = (throttle: boolean) => {
+    const now = Date.now();
+    if (!throttle || now - lastResizeEventTimeRef.current > 100) {
+      window.dispatchEvent(new Event("resize"));
+      lastResizeEventTimeRef.current = now;
+    }
+  };
+
+  const handleRatioChange = (r: number) => {
+    setCameraRatio(r);
+    triggerMapResize(true);
+  };
+
+  const handleRatioCommit = (r: number) => {
+    setCameraRatio(r);
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("arway_split_ratio", r.toString());
+      }
+    } catch (e) {}
+    triggerMapResize(false);
+  };
+
+  const handleRatioReset = () => {
+    setCameraRatio(0.55);
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("arway_split_ratio", "0.55");
+      }
+    } catch (e) {}
+    triggerMapResize(false);
+  };
+
+  const handleToggleRealign = () => {
+    const next = !realign;
+    setRealign(next);
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("arway_realign", next ? "1" : "0");
+      }
+    } catch (e) {}
+  };
 
   const routeOffPathTimer = useRef<any>(null);
 
@@ -49,25 +133,7 @@ function MapsContent() {
   
   const destination = customDestination || queryDestination;
 
-  const effectivePosition = useMemo(() => {
-    if (simulatedWalk && routeData && routeData.coords.length > 0) {
-      // Simulate position along route
-      let rem = simulatedDist;
-      let pos = routeData.coords[0];
-      for (let i = 0; i < routeData.coords.length - 1; i++) {
-        const d = haversineDistanceM(routeData.coords[i], routeData.coords[i+1]);
-        if (rem > d) {
-          rem -= d;
-          pos = routeData.coords[i+1];
-        } else {
-          pos = offsetLatLng(routeData.coords[i], bearingDeg(routeData.coords[i], routeData.coords[i+1]), rem);
-          break;
-        }
-      }
-      return pos;
-    }
-    return position;
-  }, [position, simulatedWalk, simulatedDist, routeData]);
+  const effectivePosition = position; // always use real position
 
   const remainingDist = useMemo(() => {
     if (!routeData || !effectivePosition) return 0;
@@ -78,14 +144,13 @@ function MapsContent() {
   useEffect(() => {
     let active = true;
     const getRoute = async () => {
-      if (!destination || !position) return;
+      if (!destination || !effectivePosition) return;
       setRouteLoading(true);
       setRouteError(false);
       try {
-        const data = await fetchWalkingRoute(position, destination);
+        const data = await fetchWalkingRoute(effectivePosition, destination);
         if (active) {
           setRouteData(data);
-          setSimulatedDist(0);
         }
       } catch (e) {
         if (active) setRouteError(true);
@@ -102,13 +167,13 @@ function MapsContent() {
 
   useEffect(() => {
     // Off route check
-    if (!simulatedWalk && routeData && position && routeData.source === "network" && destination) {
-      const snapped = snapToRoute(routeData.coords, position);
+    if (routeData && effectivePosition && routeData.source === "network" && destination) {
+      const snapped = snapToRoute(routeData.coords, effectivePosition);
       if (snapped.distanceFromRouteM > 30) {
         if (!routeOffPathTimer.current) {
           routeOffPathTimer.current = setTimeout(() => {
             // Reroute
-            fetchWalkingRoute(position, destination).then(data => setRouteData(data)).catch(() => {});
+            fetchWalkingRoute(effectivePosition, destination).then(data => setRouteData(data)).catch(() => {});
             routeOffPathTimer.current = null;
           }, 5000);
         }
@@ -122,16 +187,7 @@ function MapsContent() {
     return () => {
       if (routeOffPathTimer.current) clearTimeout(routeOffPathTimer.current);
     };
-  }, [position, routeData, simulatedWalk, destination]);
-
-  useEffect(() => {
-    if (simulatedWalk && holdingWalk) {
-      const interval = setInterval(() => {
-        setSimulatedDist(d => d + 1.4 / 10); // 1.4 m/s at 100ms intervals
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [simulatedWalk, holdingWalk]);
+  }, [effectivePosition, routeData, destination]);
 
   const handleStartAr = async () => {
     await requestPermission();
@@ -162,6 +218,10 @@ function MapsContent() {
     setCustomDestination({ lat, lng, name: "Dropped pin" });
   };
 
+  const handlePlaceSelect = (place: { name: string, lat: number, lng: number }) => {
+    setCustomDestination(place);
+  };
+
   return (
     <main className="flex flex-col w-full flex-1 min-h-0 bg-black text-white overflow-hidden relative">
       {/* STATUS BAR */}
@@ -177,56 +237,66 @@ function MapsContent() {
         </div>
       </div>
       
-      {simulatedWalk && (
-        <div className="absolute top-10 left-0 w-full z-50 pointer-events-none flex justify-center">
-          <div className="bg-red-600 text-white text-xs px-2 py-0.5 font-bold tracking-widest rounded shadow-md animate-pulse">SIMULATED</div>
+      <div ref={splitContainerRef} className="flex-1 w-full flex flex-col min-h-0 relative">
+        {/* TOP: CAMERA */}
+        <div className="w-full relative min-h-0 overflow-hidden" style={{ flexBasis: `${cameraRatio * 100}%` }}>
+          <CameraView onVideoReady={setVideoEl} />
+          {arActive && (
+            <ArOverlay 
+              active={arActive}
+              accuracy={accuracy}
+              destination={destination}
+              heading={heading}
+              pitch={pitch}
+              position={effectivePosition}
+              route={routeData?.coords || null}
+              realign={realign}
+            />
+          )}
+          <LandmarkScanner video={videoEl} arActive={arActive} />
         </div>
-      )}
 
-      {/* TOP: CAMERA */}
-      <div className="w-full h-[55%] relative">
-        <CameraView onVideoReady={setVideoEl} />
-        {arActive && (
-          <ArOverlay 
-            active={arActive}
-            accuracy={simulatedWalk ? 5 : accuracy}
-            destination={destination}
-            heading={heading}
-            pitch={pitch}
-            position={effectivePosition}
-            route={routeData?.coords || null}
+        {/* DIVIDER */}
+        <SplitHandle 
+          ratio={cameraRatio} 
+          min={MIN_RATIO} 
+          max={MAX_RATIO} 
+          onChange={handleRatioChange}
+          onCommit={handleRatioCommit}
+          onReset={handleRatioReset}
+          containerRef={splitContainerRef}
+        />
+
+        {/* BOTTOM: MAP */}
+        <div ref={mapContainerRef} className="w-full relative min-h-0 overflow-hidden" style={{ flexGrow: 1 }}>
+          <PlaceSearch 
+            userPosition={effectivePosition} 
+            destinationName={destination?.name || null} 
+            onSelect={handlePlaceSelect} 
           />
-        )}
-        <LandmarkScanner video={videoEl} />
-      </div>
-
-      {/* DIVIDER */}
-      <div className="w-full h-[1px] bg-gray-800 z-10" />
-
-      {/* BOTTOM: MAP */}
-      <div className="w-full h-[45%] relative">
-        <MapView 
-          position={effectivePosition} 
-          destination={destination} 
-          route={routeData?.coords.map(c => [c.lat, c.lng])} 
-          onMapClick={handleMapClick}
-          heading={heading}
-        />
-        <NavPanel 
-          destination={destination}
-          routeData={routeData}
-          routeLoading={routeLoading}
-          routeError={routeError}
-          arActive={arActive}
-          onStartAr={handleStartAr}
-          onStopAr={() => setArActive(false)}
-          onRecenter={handleRecenter}
-          onClear={handleClear}
-          remainingDistanceM={remainingDist}
-          simulatedWalk={simulatedWalk}
-          onToggleSimulate={() => setSimulatedWalk(!simulatedWalk)}
-          onHoldWalk={setHoldingWalk}
-        />
+          <MapView 
+            position={effectivePosition} 
+            destination={destination} 
+            route={routeData?.coords.map(c => [c.lat, c.lng])} 
+            onMapClick={handleMapClick}
+            heading={heading}
+          />
+          <NavPanel 
+            destination={destination}
+            routeData={routeData}
+            routeLoading={routeLoading}
+            routeError={routeError}
+            arActive={arActive}
+            onStartAr={handleStartAr}
+            onStopAr={() => setArActive(false)}
+            onRecenter={handleRecenter}
+            onClear={handleClear}
+            remainingDistanceM={remainingDist}
+            realign={realign}
+            onToggleRealign={handleToggleRealign}
+            compact={compactNav}
+          />
+        </div>
       </div>
     </main>
   );
