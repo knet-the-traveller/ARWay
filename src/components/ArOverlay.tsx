@@ -12,6 +12,7 @@ interface ArOverlayProps {
   active: boolean;
   destination: { lat: number, lng: number, name: string } | null;
   realign?: boolean;
+  zoom?: number;
 }
 
 const CAMERA_HFOV_DEG = 62;
@@ -28,11 +29,14 @@ const POSITION_HOLD_MS = 5000;
 const MAX_REALIGN_OFFSET_M = 12;
 const REALIGN_SMOOTHING = 0.1;
 
-export default function ArOverlay({ route, position, accuracy, heading, pitch, active, destination, realign = true }: ArOverlayProps) {
+export default function ArOverlay({ route, position, accuracy, heading, pitch, active, destination, realign = true, zoom = 1 }: ArOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudBadgeRef = useRef<HTMLDivElement>(null);
   const hudLabelRef = useRef<HTMLDivElement>(null);
   const hudArrowRef = useRef<SVGSVGElement>(null);
+
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom || 1;
 
   const lastHeadingRef = useRef<{ val: number, time: number } | null>(null);
   const lastPositionRef = useRef<{ val: LatLng, time: number } | null>(null);
@@ -146,6 +150,10 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
             
             offsetNorthRef.current += (dNorth - offsetNorthRef.current) * REALIGN_SMOOTHING;
             offsetEastRef.current += (dEast - offsetEastRef.current) * REALIGN_SMOOTHING;
+          const latOffset = lateralOffsetMeters(snapped.snappedPoint, currentPos);
+          if (latOffset.distanceM <= MAX_REALIGN_OFFSET_M) {
+            offsetNorthRef.current += (latOffset.north - offsetNorthRef.current) * REALIGN_SMOOTHING;
+            offsetEastRef.current += (latOffset.east - offsetEastRef.current) * REALIGN_SMOOTHING;
             
             const adjLat = currentPos.lat + offsetNorthRef.current / 111139;
             const adjLng = currentPos.lng + offsetEastRef.current / (111139 * Math.cos(currentPos.lat * Math.PI / 180));
@@ -162,6 +170,9 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
         const path = (currentRoute && currentRoute.length > 1)
         ? sliceAhead(currentRoute, snapToRoute(currentRoute, currentPos), LOOKAHEAD_M)
         : (currentDest ? [currentPos, currentDest] : null);
+        const path = (currentRoute && currentRoute.length > 1 && snapped)
+          ? sliceAhead(currentRoute, snapped, LOOKAHEAD_M)
+          : (currentDest ? [currentPos, currentDest] : null);
 
         if (!path || path.length < 2) {
           return;
@@ -212,8 +223,8 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
         const w = canvas.width;
         const h = canvas.height;
         const cx = w / 2;
-        const cy = h / 2;
-        const f = (w / 2) / Math.tan((CAMERA_HFOV_DEG * Math.PI / 180) / 2);
+        const effectiveZoom = zoomRef.current || 1;
+        const f = ((w / 2) / Math.tan((CAMERA_HFOV_DEG * Math.PI / 180) / 2)) * effectiveZoom;
 
         const pitchDeg = pitchRef.current;
         const pitchRad = pitchDeg * Math.PI / 180;

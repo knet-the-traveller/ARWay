@@ -17,9 +17,18 @@ import { LockIcon, BugIcon, CloseIcon } from "./icons";
 interface LandmarkScannerProps {
   video: HTMLVideoElement | null;
   arActive?: boolean;
+  cameraActive?: boolean;
+  onToggleCamera?: () => void;
+  zoom?: number;
 }
 
-export default function LandmarkScanner({ video, arActive }: LandmarkScannerProps) {
+export default function LandmarkScanner({ 
+  video, 
+  arActive, 
+  cameraActive = true, 
+  onToggleCamera,
+  zoom = 1
+}: LandmarkScannerProps) {
   const router = useRouter();
   const isOnline = useOnlineStatus();
   const [isOfflineReady, setIsOfflineReady] = useState(false);
@@ -83,7 +92,7 @@ export default function LandmarkScanner({ video, arActive }: LandmarkScannerProp
 
     const t0 = performance.now();
     try {
-      const vector = await embedFrame(video);
+      const vector = await embedFrame(video, zoom);
       if (!vector) {
         scheduleScan();
         return;
@@ -189,6 +198,11 @@ export default function LandmarkScanner({ video, arActive }: LandmarkScannerProp
     }
 
     const handleClick = () => {
+      if (!cameraActive && onToggleCamera) {
+        onToggleCamera();
+        startScanning();
+        return;
+      }
       if (isScanning) {
         stopScanning();
       } else {
@@ -200,7 +214,8 @@ export default function LandmarkScanner({ video, arActive }: LandmarkScannerProp
       <button 
         onClick={handleClick}
         aria-label={isScanning ? "Stop scanning" : "Scan landmarks"}
-        className="relative w-[44px] h-[44px] rounded-full bg-black/55 backdrop-blur-sm flex items-center justify-center text-white pointer-events-auto active:bg-black/80 shadow-sm flex-shrink-0 z-40"
+        title={isScanning ? "Stop AI scan" : "Scan landmark with on-device AI"}
+        className="relative w-[40px] h-[40px] rounded-full bg-black/65 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white pointer-events-auto active:scale-95 shadow-md flex-shrink-0 z-40"
       >
         {pulse && (
           <div className="absolute inset-0 rounded-full border-2 border-blue-500 animate-ping opacity-75" />
@@ -317,16 +332,50 @@ export default function LandmarkScanner({ video, arActive }: LandmarkScannerProp
         </div>
 
         {/* Right Column */}
-        <div className="flex flex-col gap-2 items-end w-[30%]">
-          {renderCameraButton()}
+        <div className="flex flex-col gap-2 items-end w-[40%]">
+          <div className="flex items-center gap-1.5 pointer-events-auto">
+            {/* Camera Power Toggle (Start/Stop Camera Stream) */}
+            {onToggleCamera && (
+              <button
+                type="button"
+                onClick={onToggleCamera}
+                aria-label={cameraActive ? "Turn off camera" : "Turn on camera"}
+                title={cameraActive ? "Camera active. Tap to turn OFF and save battery." : "Camera in standby. Tap to turn ON."}
+                className={`relative w-[40px] h-[40px] rounded-full backdrop-blur-md flex items-center justify-center pointer-events-auto active:scale-95 transition-all shadow-md select-none ${
+                  cameraActive 
+                    ? "bg-black/65 border border-emerald-500/50 text-emerald-400" 
+                    : "bg-black/85 border border-neutral-700 text-neutral-400"
+                }`}
+              >
+                {cameraActive ? (
+                  <>
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                )}
+              </button>
+            )}
+
+            {/* Landmark AI Scanner */}
+            {renderCameraButton()}
+          </div>
 
           {/* Debug Toggle */}
           {isScanning && loadingPhase === "done" && (
             <button 
+              type="button"
               onClick={() => setShowDebug(!showDebug)}
-              className="w-[44px] h-[44px] rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-gray-300 pointer-events-auto active:bg-black/80 shadow-sm flex-shrink-0"
+              className="w-[36px] h-[36px] rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-gray-300 pointer-events-auto active:scale-95 shadow-sm flex-shrink-0"
+              title="Toggle AI recognition debug logs"
             >
-              <BugIcon className="w-5 h-5" />
+              <BugIcon className="w-4 h-4" />
             </button>
           )}
         </div>
