@@ -143,13 +143,6 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           : null;
 
         if (realignRef.current && snapped && currentRoute && currentRoute.length > 1) {
-        const latOffset = lateralOffsetMeters(currentPos, snapped.snappedPoint);
-        if (Math.abs(latOffset.distanceM) < MAX_REALIGN_OFFSET_M) {
-            const dNorth = (snapped.snappedPoint.lat - currentPos.lat) * 111139;
-            const dEast = (snapped.snappedPoint.lng - currentPos.lng) * 111139 * Math.cos(currentPos.lat * Math.PI / 180);
-            
-            offsetNorthRef.current += (dNorth - offsetNorthRef.current) * REALIGN_SMOOTHING;
-            offsetEastRef.current += (dEast - offsetEastRef.current) * REALIGN_SMOOTHING;
           const latOffset = lateralOffsetMeters(snapped.snappedPoint, currentPos);
           if (latOffset.distanceM <= MAX_REALIGN_OFFSET_M) {
             offsetNorthRef.current += (latOffset.north - offsetNorthRef.current) * REALIGN_SMOOTHING;
@@ -167,9 +160,6 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           offsetEastRef.current *= 0.9;
         }
 
-        const path = (currentRoute && currentRoute.length > 1)
-        ? sliceAhead(currentRoute, snapToRoute(currentRoute, currentPos), LOOKAHEAD_M)
-        : (currentDest ? [currentPos, currentDest] : null);
         const path = (currentRoute && currentRoute.length > 1 && snapped)
           ? sliceAhead(currentRoute, snapped, LOOKAHEAD_M)
           : (currentDest ? [currentPos, currentDest] : null);
