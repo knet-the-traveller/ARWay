@@ -188,169 +188,171 @@ export default function OfflineSetupPage() {
   };
 
   return (
-    <main className="min-h-screen bg-black text-white p-4 font-sans max-w-[420px] mx-auto pb-12">
-      {/* HEADER */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-white tracking-tight">Offline setup</h1>
-        <div suppressHydrationWarning className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${
-          (mounted ? isOnline : true) ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30" : "bg-amber-950/80 text-amber-400 border border-amber-500/30"
-        }`}>
-          <span className={`w-2 h-2 rounded-full ${(mounted ? isOnline : true) ? "bg-emerald-400" : "bg-amber-400"}`} />
-          <span suppressHydrationWarning>{(mounted ? isOnline : true) ? "Online" : "Offline"}</span>
-        </div>
-      </div>
-
-      {/* STATUS BLOCK */}
-      <section className="bg-neutral-900 border border-neutral-800 rounded-xl p-3.5 mb-5 space-y-2 text-xs">
-        <div className="flex justify-between items-center">
-          <span className="text-neutral-400">Service Worker</span>
-          <span suppressHydrationWarning className={swActive ? "text-emerald-400 font-medium" : "text-amber-400 font-medium"}>
-            {swActive ? "Active" : "Not active (open HTTPS prod)"}
-          </span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-neutral-400">Storage Used</span>
-          <span suppressHydrationWarning className="text-neutral-200 font-mono">
-            {storageInfo.usedMb} MB / {storageInfo.quotaMb} MB
-          </span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-neutral-400">Persistence Granted</span>
-          <span suppressHydrationWarning className={persistent ? "text-emerald-400 font-medium" : "text-neutral-400"}>
-            {persistent ? "Yes" : "No"}
-          </span>
-        </div>
-      </section>
-
-      {/* INSTRUCTIONS */}
-      <p className="text-neutral-400 text-xs leading-relaxed mb-4">
-        1) Open this page online. 2) Tap Prepare offline. 3) Tap Verify. 4) Turn on airplane mode and reopen the app.
-      </p>
-
-      {/* ACTION 1: PREPARE OFFLINE */}
-      <div className="mb-6 space-y-3">
-        <button
-          onClick={handlePrepare}
-          disabled={!(mounted ? isOnline : true) || isPreparing}
-          className={`w-full h-11 rounded-xl font-semibold text-sm transition-all flex items-center justify-center ${
-            !(mounted ? isOnline : true)
-              ? "bg-neutral-800 text-neutral-500 cursor-not-allowed"
-              : isPreparing
-              ? "bg-blue-600/50 text-white cursor-wait"
-              : "bg-[#3b82f6] text-white active:bg-blue-700"
-          }`}
-        >
-          {isPreparing ? "Preparing data..." : "Prepare offline"}
-        </button>
-
-        {mounted && !isOnline && (
-          <p className="text-amber-400/90 text-xs text-center font-medium">
-            Connect to the internet once to prepare
-          </p>
-        )}
-
-        {/* PROGRESS ROWS */}
-        {(isPreparing || prepSummary) && (
-          <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-3 space-y-2.5 text-xs">
-            {/* Step 1: Pages */}
-            <div>
-              <div className="flex justify-between text-neutral-300 font-medium mb-1">
-                <span>1. Pages & Code</span>
-                <span>{step1Progress.count} / {step1Progress.total}</span>
-              </div>
-              <p className="text-neutral-500 text-[11px] truncate">{step1Progress.label}</p>
-              {step1Progress.err && <p className="text-red-400 text-[11px]">{step1Progress.err}</p>}
-            </div>
-
-            {/* Step 2: Images */}
-            <div>
-              <div className="flex justify-between text-neutral-300 font-medium mb-1">
-                <span>2. Sceneries & Images</span>
-                <span>{step2Progress.count}</span>
-              </div>
-              <p className="text-neutral-500 text-[11px] truncate">{step2Progress.label}</p>
-              {step2Progress.err && <p className="text-red-400 text-[11px]">{step2Progress.err}</p>}
-            </div>
-
-            {/* Step 3: AI Model */}
-            <div>
-              <div className="flex justify-between text-neutral-300 font-medium mb-1">
-                <span>3. On-Device AI Model</span>
-                <span>{step3Progress.done ? "Ready" : "..."}</span>
-              </div>
-              <p className="text-neutral-500 text-[11px] truncate">{step3Progress.label}</p>
-              {step3Progress.err && <p className="text-red-400 text-[11px]">{step3Progress.err}</p>}
-            </div>
-
-            {/* Step 4: Map Tiles */}
-            <div>
-              <div className="flex justify-between text-neutral-300 font-medium mb-1">
-                <span>4. Demo Map Tiles</span>
-                <span>{step4Progress.count}</span>
-              </div>
-              <p className="text-neutral-500 text-[11px] truncate">{step4Progress.label}</p>
-              {step4Progress.err && <p className="text-red-400 text-[11px]">{step4Progress.err}</p>}
-            </div>
+    <main className="flex flex-col w-full flex-1 min-h-0 bg-black text-white relative overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 font-sans max-w-[420px] w-full mx-auto pb-24 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        {/* HEADER */}
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-xl font-bold text-white tracking-tight">Offline setup</h1>
+          <div suppressHydrationWarning className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${
+            (mounted ? isOnline : true) ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30" : "bg-amber-950/80 text-amber-400 border border-amber-500/30"
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${(mounted ? isOnline : true) ? "bg-emerald-400" : "bg-amber-400"}`} />
+            <span suppressHydrationWarning>{(mounted ? isOnline : true) ? "Online" : "Offline"}</span>
           </div>
-        )}
+        </div>
 
-        {prepSummary && (
-          <div className="p-2.5 bg-emerald-950/40 border border-emerald-500/20 text-emerald-300 text-xs rounded-xl">
-            {prepSummary}
+        {/* STATUS BLOCK */}
+        <section className="bg-neutral-900 border border-neutral-800 rounded-xl p-3.5 mb-5 space-y-2 text-xs">
+          <div className="flex justify-between items-center">
+            <span className="text-neutral-400">Service Worker</span>
+            <span suppressHydrationWarning className={swActive ? "text-emerald-400 font-medium" : "text-amber-400 font-medium"}>
+              {swActive ? "Active" : "Not active (open HTTPS prod)"}
+            </span>
           </div>
-        )}
-      </div>
+          <div className="flex justify-between items-center">
+            <span className="text-neutral-400">Storage Used</span>
+            <span suppressHydrationWarning className="text-neutral-200 font-mono">
+              {storageInfo.usedMb} MB / {storageInfo.quotaMb} MB
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-neutral-400">Persistence Granted</span>
+            <span suppressHydrationWarning className={persistent ? "text-emerald-400 font-medium" : "text-neutral-400"}>
+              {persistent ? "Yes" : "No"}
+            </span>
+          </div>
+        </section>
 
-      {/* ACTION 2: VERIFY OFFLINE READINESS */}
-      <div className="mb-4">
-        <button
-          onClick={handleVerify}
-          disabled={isVerifying}
-          className="w-full h-11 rounded-xl font-semibold text-sm bg-neutral-800 border border-neutral-700 text-white active:bg-neutral-700 transition-colors"
-        >
-          {isVerifying ? "Verifying..." : "Verify offline readiness"}
-        </button>
+        {/* INSTRUCTIONS */}
+        <p className="text-neutral-400 text-xs leading-relaxed mb-4">
+          1) Open this page online. 2) Tap Prepare offline. 3) Tap Verify. 4) Turn on airplane mode and reopen the app.
+        </p>
 
-        {verifyList && (
-          <div className="mt-3 bg-neutral-900 border border-neutral-800 rounded-xl divide-y divide-neutral-800">
-            {verifyList.map((item, idx) => (
-              <div key={idx} className="p-3 flex items-start gap-2.5 text-xs">
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold ${
-                  item.ok ? "bg-emerald-500 text-black" : "bg-red-500 text-white"
-                }`}>
-                  {item.ok ? "✓" : "✕"}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-neutral-200">{item.label}</div>
-                  <div className="text-neutral-400 text-[11px] mt-0.5">{item.detail}</div>
+        {/* ACTION 1: PREPARE OFFLINE */}
+        <div className="mb-6 space-y-3">
+          <button
+            onClick={handlePrepare}
+            disabled={!(mounted ? isOnline : true) || isPreparing}
+            className={`w-full h-11 rounded-xl font-semibold text-sm transition-all flex items-center justify-center ${
+              !(mounted ? isOnline : true)
+                ? "bg-neutral-800 text-neutral-500 cursor-not-allowed"
+                : isPreparing
+                ? "bg-blue-600/50 text-white cursor-wait"
+                : "bg-[#3b82f6] text-white active:bg-blue-700"
+            }`}
+          >
+            {isPreparing ? "Preparing data..." : "Prepare offline"}
+          </button>
+
+          {mounted && !isOnline && (
+            <p className="text-amber-400/90 text-xs text-center font-medium">
+              Connect to the internet once to prepare
+            </p>
+          )}
+
+          {/* PROGRESS ROWS */}
+          {(isPreparing || prepSummary) && (
+            <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-3 space-y-2.5 text-xs">
+              {/* Step 1: Pages */}
+              <div>
+                <div className="flex justify-between text-neutral-300 font-medium mb-1">
+                  <span>1. Pages & Code</span>
+                  <span>{step1Progress.count} / {step1Progress.total}</span>
                 </div>
+                <p className="text-neutral-500 text-[11px] truncate">{step1Progress.label}</p>
+                {step1Progress.err && <p className="text-red-400 text-[11px]">{step1Progress.err}</p>}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* ACTION 3: COPY REPORT */}
-      <div className="mb-6">
-        <button
-          onClick={handleCopyReport}
-          className="w-full h-11 rounded-xl font-medium text-xs bg-neutral-900 text-neutral-300 border border-neutral-800 active:bg-neutral-800 transition-colors"
-        >
-          Copy report
-        </button>
-        {copyFeedback && (
-          <p className="text-emerald-400 text-xs text-center mt-1.5 font-medium">{copyFeedback}</p>
-        )}
-      </div>
+              {/* Step 2: Images */}
+              <div>
+                <div className="flex justify-between text-neutral-300 font-medium mb-1">
+                  <span>2. Sceneries & Images</span>
+                  <span>{step2Progress.count}</span>
+                </div>
+                <p className="text-neutral-500 text-[11px] truncate">{step2Progress.label}</p>
+                {step2Progress.err && <p className="text-red-400 text-[11px]">{step2Progress.err}</p>}
+              </div>
 
-      {/* ACTION 4: CLEAR OFFLINE DATA */}
-      <div>
-        <button
-          onClick={() => setShowClearModal(true)}
-          className="w-full h-11 rounded-xl font-medium text-xs text-red-400 border border-red-500/30 hover:bg-red-500/10 active:bg-red-500/20 transition-colors"
-        >
-          Clear offline data
-        </button>
+              {/* Step 3: AI Model */}
+              <div>
+                <div className="flex justify-between text-neutral-300 font-medium mb-1">
+                  <span>3. On-Device AI Model</span>
+                  <span>{step3Progress.done ? "Ready" : "..."}</span>
+                </div>
+                <p className="text-neutral-500 text-[11px] truncate">{step3Progress.label}</p>
+                {step3Progress.err && <p className="text-red-400 text-[11px]">{step3Progress.err}</p>}
+              </div>
+
+              {/* Step 4: Map Tiles */}
+              <div>
+                <div className="flex justify-between text-neutral-300 font-medium mb-1">
+                  <span>4. Demo Map Tiles</span>
+                  <span>{step4Progress.count}</span>
+                </div>
+                <p className="text-neutral-500 text-[11px] truncate">{step4Progress.label}</p>
+                {step4Progress.err && <p className="text-red-400 text-[11px]">{step4Progress.err}</p>}
+              </div>
+            </div>
+          )}
+
+          {prepSummary && (
+            <div className="p-2.5 bg-emerald-950/40 border border-emerald-500/20 text-emerald-300 text-xs rounded-xl">
+              {prepSummary}
+            </div>
+          )}
+        </div>
+
+        {/* ACTION 2: VERIFY OFFLINE READINESS */}
+        <div className="mb-4">
+          <button
+            onClick={handleVerify}
+            disabled={isVerifying}
+            className="w-full h-11 rounded-xl font-semibold text-sm bg-neutral-800 border border-neutral-700 text-white active:bg-neutral-700 transition-colors"
+          >
+            {isVerifying ? "Verifying..." : "Verify offline readiness"}
+          </button>
+
+          {verifyList && (
+            <div className="mt-3 bg-neutral-900 border border-neutral-800 rounded-xl divide-y divide-neutral-800">
+              {verifyList.map((item, idx) => (
+                <div key={idx} className="p-3 flex items-start gap-2.5 text-xs">
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold ${
+                    item.ok ? "bg-emerald-500 text-black" : "bg-red-500 text-white"
+                  }`}>
+                    {item.ok ? "✓" : "✕"}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-neutral-200">{item.label}</div>
+                    <div className="text-neutral-400 text-[11px] mt-0.5">{item.detail}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ACTION 3: COPY REPORT */}
+        <div className="mb-4">
+          <button
+            onClick={handleCopyReport}
+            className="w-full h-11 rounded-xl font-medium text-xs bg-neutral-900 text-neutral-300 border border-neutral-800 active:bg-neutral-800 transition-colors"
+          >
+            Copy report
+          </button>
+          {copyFeedback && (
+            <p className="text-emerald-400 text-xs text-center mt-1.5 font-medium">{copyFeedback}</p>
+          )}
+        </div>
+
+        {/* ACTION 4: CLEAR OFFLINE DATA */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowClearModal(true)}
+            className="w-full h-11 rounded-xl font-medium text-xs text-red-400 border border-red-500/30 hover:bg-red-500/10 active:bg-red-500/20 transition-colors"
+          >
+            Clear offline data
+          </button>
+        </div>
       </div>
 
       {/* CONFIRM MODAL */}
