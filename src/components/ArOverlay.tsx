@@ -160,9 +160,13 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           offsetEastRef.current *= 0.9;
         }
 
-        const path = (currentRoute && currentRoute.length > 1 && snapped)
+        let path = (currentRoute && currentRoute.length > 1 && snapped)
           ? sliceAhead(currentRoute, snapped, LOOKAHEAD_M)
-          : (currentDest ? [currentPos, currentDest] : null);
+          : null;
+
+        if (!path || path.length < 2) {
+          path = currentDest ? [currentPos, currentDest] : null;
+        }
 
         if (!path || path.length < 2) {
           return;
@@ -212,7 +216,10 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
 
         const w = canvas.width;
         const h = canvas.height;
+        if (w === 0 || h === 0) return;
+
         const cx = w / 2;
+        const cy = h / 2;
         const effectiveZoom = zoomRef.current || 1;
         const f = ((w / 2) / Math.tan((CAMERA_HFOV_DEG * Math.PI / 180) / 2)) * effectiveZoom;
 
