@@ -1,0 +1,280 @@
+// ARWay Service Worker - Hand-written offline PWA support
+// No external PWA libraries (plain JavaScript only)
+
+const CACHE_VERSION = "v1";
+
+const CACHE_PAGES = `arway-pages-${CACHE_VERSION}`;
+const CACHE_STATIC = `arway-static-${CACHE_VERSION}`;
+const CACHE_MEDIA = `arway-media-${CACHE_VERSION}`;
+const CACHE_TILES = `arway-tiles-${CACHE_VERSION}`;
+const CACHE_CDN = `arway-cdn-${CACHE_VERSION}`;
+
+const CURRENT_CACHES = [
+  CACHE_PAGES,
+  CACHE_STATIC,
+  CACHE_MEDIA,
+  CACHE_TILES,
+  CACHE_CDN
+];
+
+const TILE_HOSTS = ["tile.openstreetmap.org"];
+const MAX_TILES = 400;
+
+// Install: precache only /offline.html and skip waiting
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_PAGES).then((cache) => {
+      return cache.add("/offline.html").catch((err) => {
+        console.warn("Failed to precache /offline.html:", err);
+      });
+    })
+  );
+});
+
+// Activate: clean up outdated arway- caches and claim clients
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys.map((key) => {
+          if (key.startsWith("arway-") && !CURRENT_CACHES.includes(key)) {
+            return caches.delete(key);
+          }
+        })
+      );
+      await self.clients.claim();
+    })()
+  );
+});
+
+// Message listener
+self.addEventListener("message", (event) => {
+  if (!event.data) return;
+
+  if (event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+
+  if (event.data.type === "CLEAR_ALL") {
+    event.waitUntil(
+      (async () => {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys.map((k) => {
+            if (k.startsWith("arway-")) {
+              return caches.delete(k);
+            }
+          })
+        );
+        if (event.ports && event.ports[0]) {
+          event.ports[0].postMessage({ ok: true });
+        } else if (event.source) {
+          event.source.postMessage({ type: "CLEAR_ALL_DONE", ok: true });
+        }
+      })()
+    );
+  }
+});
+
+// Fetch Interception
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+
+  const url = new URL(req.url);
+
+  // Exclude ignored endpoints
+  if (
+    url.pathname.includes("/api/") ||
+    url.hostname === "routing.openstreetmap.de" ||
+    url.hostname === "nominatim.openstreetmap.org" ||
+    url.hostname === "huggingface.co" ||
+    url.hostname === "hf.co" ||
+    url.protocol === "chrome-extension:" ||
+    req.headers.has("range")
+  ) {
+    return;
+  }
+
+  // 1. Navigation requests (HTML pages)
+  if (req.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        const pagesCache = await caches.open(CACHE_PAGES);
+
+        // Network-first with a 4-second timeout
+        try {
+          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
+          const fetchPromise = fetch(req).then((res) => {
+            if (res && res.ok) {
+              pagesCache.put(req, res.clone());
+            }
+            return res;
+          }).catch(() => null);
+
+          const networkRes = await Promise.race([fetchPromise, timeoutPromise]);
+          if (networkRes && networkRes.ok) {
+            return networkRes;
+          }
+        } catch (e) {}
+
+        // Fallback: match URL ignoring search params
+        const cachedMatch = await pagesCache.match(req, { ignoreSearch: true });
+        if (cachedMatch) return cachedMatch;
+
+        // Fallback: root "/"
+        const rootMatch = await pagesCache.match("/", { ignoreSearch: true });
+        if (rootMatch) return rootMatch;
+
+        // Fallback: /offline.html
+        const offlineMatch = await pagesCache.match("/offline.html");
+        if (offlineMatch) return offlineMatch;
+
+        return new Response("You are offline. Open ARWay while online once.", {
+          status: 503,
+          headers: { "Content-Type": "text/plain" }
+        });
+      })()
+    );
+    return;
+  }
+
+  // 2. /_next/static/* (hashed immutable Next.js assets) -> Cache-First
+  if (url.origin === self.location.origin && url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(
+      (async () => {
+        const staticCache = await caches.open(CACHE_STATIC);
+        const cached = await staticCache.match(req);
+        if (cached) return cached;
+
+        try {
+          const res = await fetch(req);
+          if (res && res.ok) {
+            staticCache.put(req, res.clone());
+          }
+          return res;
+        } catch (e) {
+          // If offline and missing, return empty response so build doesn't throw fatal crash
+          return new Response("", { status: 404 });
+        }
+      })()
+    );
+    return;
+  }
+
+  // 3. Same-origin RSC and data requests
+  const isRsc = req.headers.get("RSC") === "1" || url.searchParams.has("_rsc") || url.pathname.startsWith("/_next/data/");
+  if (url.origin === self.location.origin && isRsc) {
+    event.respondWith(
+      (async () => {
+        const pagesCache = await caches.open(CACHE_PAGES);
+        try {
+          const res = await fetch(req);
+          if (res && res.ok) {
+            pagesCache.put(req, res.clone());
+            return res;
+          }
+        } catch (e) {}
+
+        const cached = await pagesCache.match(req, { ignoreSearch: true });
+        if (cached) return cached;
+
+        // If neither, let request fail so Next.js falls back to full-page navigation
+        return new Response("RSC fetch failed", { status: 503 });
+      })()
+    );
+    return;
+  }
+
+  // 4. Same-origin media, images, fonts, icons -> Cache-First
+  const isMedia = url.origin === self.location.origin && (
+    url.pathname.startsWith("/sceneries/") ||
+    url.pathname.startsWith("/shops/") ||
+    url.pathname.startsWith("/icons/") ||
+    req.destination === "image" ||
+    req.destination === "font"
+  );
+  if (isMedia) {
+    event.respondWith(
+      (async () => {
+        const mediaCache = await caches.open(CACHE_MEDIA);
+        const cached = await mediaCache.match(req);
+        if (cached) return cached;
+
+        try {
+          const res = await fetch(req);
+          if (res && res.ok) {
+            mediaCache.put(req, res.clone());
+          }
+          return res;
+        } catch (e) {
+          return new Response("", { status: 404 });
+        }
+      })()
+    );
+    return;
+  }
+
+  // 5. OpenStreetMap Tiles -> Cache-First into arway-tiles
+  if (TILE_HOSTS.some((host) => url.hostname.includes(host))) {
+    event.respondWith(
+      (async () => {
+        const tilesCache = await caches.open(CACHE_TILES);
+        const cached = await tilesCache.match(req);
+        if (cached) return cached;
+
+        try {
+          // Leaflet requests tiles with no-cors. Refetch with cors to store clean non-opaque response.
+          let res;
+          try {
+            res = await fetch(new Request(url.toString(), { mode: "cors" }));
+          } catch (corsErr) {
+            res = await fetch(req);
+          }
+
+          if (res && (res.ok || res.type === "opaque")) {
+            await tilesCache.put(req, res.clone());
+
+            // Limit cache to MAX_TILES
+            const keys = await tilesCache.keys();
+            if (keys.length > MAX_TILES) {
+              const overflow = keys.length - MAX_TILES;
+              for (let i = 0; i < overflow; i++) {
+                await tilesCache.delete(keys[i]);
+              }
+            }
+            return res;
+          }
+        } catch (e) {}
+
+        // If offline and tile missing, return 204 No Content so Leaflet stays blank without error
+        return new Response(null, { status: 204 });
+      })()
+    );
+    return;
+  }
+
+  // 6. ONNX runtime files from cdn.jsdelivr.net -> Cache-First into arway-cdn
+  if (url.hostname === "cdn.jsdelivr.net") {
+    event.respondWith(
+      (async () => {
+        const cdnCache = await caches.open(CACHE_CDN);
+        const cached = await cdnCache.match(req);
+        if (cached) return cached;
+
+        try {
+          const res = await fetch(req);
+          if (res && res.ok) {
+            cdnCache.put(req, res.clone());
+          }
+          return res;
+        } catch (e) {
+          return new Response("", { status: 404 });
+        }
+      })()
+    );
+    return;
+  }
+});
