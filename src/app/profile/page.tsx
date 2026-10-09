@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { getUser, isSignedIn, User } from "@/lib/user";
 import { getPosts, toggleLike, Post } from "@/lib/posts";
 import { sceneries } from "@/lib/sceneries";
@@ -17,6 +18,7 @@ import { SavedPlaceRow } from "@/components/profile/SavedPlaceRow";
 import { PostTile } from "@/components/profile/PostTile";
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [isClient, setIsClient] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -78,7 +80,7 @@ export default function ProfilePage() {
     return <SignInScreen onSignIn={() => {
       setSignedIn(true);
       setUser(getUser());
-      loadData();
+      router.push('/');
     }} />;
   }
 

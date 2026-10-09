@@ -6,6 +6,7 @@ import { getPosts, toggleLike, Post } from "@/lib/posts";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { sceneries } from "@/lib/sceneries";
 import { haversineDistanceM } from "@/lib/geo";
+import { getUser, User } from "@/lib/user";
 import CreatePostSheet from "@/components/CreatePostSheet";
 import PackCard from "@/components/home/PackCard";
 import TrailCard from "@/components/home/TrailCard";
@@ -17,6 +18,7 @@ import { NavArrowIcon } from "@/components/icons/NavArrowIcon";
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const { position, isDemoMode } = useGeolocation();
 
   // Dynamically resolve current location name from live GPS or demo fallback
@@ -55,6 +57,7 @@ export default function Home() {
 
   useEffect(() => {
     loadPosts();
+    setUser(getUser());
   }, []);
 
   const handleLike = async (id: string) => {
@@ -89,7 +92,9 @@ export default function Home() {
             </svg>
             <span suppressHydrationWarning>Currently in: {currentLocationName}</span>
           </div>
-          <h2 className="font-display text-[30px] leading-tight" style={{ color: "var(--aw-cream)" }}>Hi, Knet</h2>
+          <h2 className="font-display text-[30px] leading-tight" style={{ color: "var(--aw-cream)" }}>
+            {user?.name ? `Hi, ${user.name}` : "Hi, Knet"}
+          </h2>
         </div>
 
         {/* OFFLINE PACK */}
