@@ -20,14 +20,20 @@ const CURRENT_CACHES = [
 const TILE_HOSTS = ["tile.openstreetmap.org"];
 const MAX_TILES = 400;
 
-// Install: precache only /offline.html and skip waiting
+// Install: precache /offline.html and skip waiting
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_PAGES).then((cache) => {
-      return cache.add("/offline.html").catch((err) => {
-        console.warn("Failed to precache /offline.html:", err);
-      });
+    caches.open(CACHE_PAGES).then(async (cache) => {
+      try {
+        await cache.add("/offline.html");
+      } catch (err) {
+        const offlineFallback = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ARWay - You're offline</title><style>body{margin:0;padding:24px;background:#000;color:#fff;font-family:-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}h1{font-size:22px;margin:0 0 12px}p{font-size:15px;color:#a3a3a3;margin:0 0 24px;max-width:320px}button{width:100%;max-width:320px;height:48px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-weight:600;cursor:pointer}</style></head><body><h1>You're offline</h1><p>Open ARWay once while online and tap Prepare offline on the Offline setup page so everything is saved on your phone.</p><button onclick="window.location.reload()">Try again</button></body></html>`;
+        await cache.put("/offline.html", new Response(offlineFallback, {
+          status: 200,
+          headers: { "Content-Type": "text/html" }
+        }));
+      }
     })
   );
 });
