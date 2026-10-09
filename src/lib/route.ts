@@ -21,11 +21,16 @@ export interface RouteData {
 // - After a route is loaded or cached, AR guidance makes no further network requests.
 
 export async function fetchWalkingRoute(from: LatLng, to: LatLng): Promise<RouteData> {
+  // If browser is explicitly offline, skip remote fetch immediately
+  const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+
   const tryFetch = async (profile: "foot" | "driving") => {
+    if (isOffline) throw new Error("Offline");
+
     const url = `https://routing.openstreetmap.de/routed-foot/route/v1/${profile}/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&steps=true`;
     
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    const timeout = setTimeout(() => controller.abort(), 3000);
     
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
@@ -70,11 +75,18 @@ export async function fetchWalkingRoute(from: LatLng, to: LatLng): Promise<Route
   };
 
   try {
+    if (isOffline) throw new Error("Offline");
+
     let routeData: RouteData | null = null;
     try {
       routeData = await tryFetch("foot");
     } catch (e) {
-      routeData = await tryFetch("driving");
+      // If foot failed or timed out, only try driving if online
+      if (!isOffline) {
+        routeData = await tryFetch("driving");
+      } else {
+        throw e;
+      }
     }
     
     // Save to cache

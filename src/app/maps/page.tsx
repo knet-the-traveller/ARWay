@@ -2,19 +2,30 @@
 
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/hooks/useGeolocation";
-import CameraView from "@/components/CameraView";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, useRef } from "react";
-import LandmarkScanner from "@/components/LandmarkScanner";
-import ArOverlay from "@/components/ArOverlay";
 import NavPanel from "@/components/NavPanel";
 import { fetchWalkingRoute, RouteData } from "@/lib/route";
 import { useHeading } from "@/hooks/useHeading";
 import { LatLng, remainingDistanceM as getRemainingDistance, snapToRoute, haversineDistanceM, bearingDeg, offsetLatLng } from "@/lib/geo";
 
+const CameraView = dynamic(() => import("@/components/CameraView"), {
+  ssr: false,
+});
+
+const LandmarkScanner = dynamic(() => import("@/components/LandmarkScanner"), {
+  ssr: false,
+});
+
+const ArOverlay = dynamic(() => import("@/components/ArOverlay"), {
+  ssr: false,
+});
+
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
 });
+
+const DEMO_FALLBACK_COORDS = { lat: 14.5917, lng: 120.9734 };
 
 function MapsContent() {
   const router = useRouter();
@@ -25,10 +36,10 @@ function MapsContent() {
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState(false);
-  
+
   const [arActive, setArActive] = useState(false);
   const { heading, pitch, requestPermission, calibrationOffset, setCalibrationOffset } = useHeading();
-  
+
   const [simulatedWalk, setSimulatedWalk] = useState(false);
   const [simulatedDist, setSimulatedDist] = useState(0);
   const [holdingWalk, setHoldingWalk] = useState(false);
@@ -45,8 +56,8 @@ function MapsContent() {
     return null;
   }, [searchParams]);
 
-  const [customDestination, setCustomDestination] = useState<{lat: number, lng: number, name: string} | null>(null);
-  
+  const [customDestination, setCustomDestination] = useState<{ lat: number, lng: number, name: string } | null>(null);
+
   const destination = customDestination || queryDestination;
 
   const effectivePosition = useMemo(() => {
@@ -55,34 +66,45 @@ function MapsContent() {
       let rem = simulatedDist;
       let pos = routeData.coords[0];
       for (let i = 0; i < routeData.coords.length - 1; i++) {
-        const d = haversineDistanceM(routeData.coords[i], routeData.coords[i+1]);
+        const d = haversineDistanceM(routeData.coords[i], routeData.coords[i + 1]);
         if (rem > d) {
           rem -= d;
-          pos = routeData.coords[i+1];
+          pos = routeData.coords[i + 1];
         } else {
-          pos = offsetLatLng(routeData.coords[i], bearingDeg(routeData.coords[i], routeData.coords[i+1]), rem);
+          pos = offsetLatLng(routeData.coords[i], bearingDeg(routeData.coords[i], routeData.coords[i + 1]), rem);
           break;
         }
       }
       return pos;
     }
-    return position;
+    return position || DEMO_FALLBACK_COORDS;
   }, [position, simulatedWalk, simulatedDist, routeData]);
 
   const remainingDist = useMemo(() => {
-    if (!routeData || !effectivePosition) return 0;
-    const snapped = snapToRoute(routeData.coords, effectivePosition);
-    return getRemainingDistance(routeData.coords, snapped) + haversineDistanceM(effectivePosition, snapped.snappedPoint);
-  }, [routeData, effectivePosition]);
+    if (!destination) return 0;
+    if (routeData && routeData.coords.length > 0 && effectivePosition) {
+      const snapped = snapToRoute(routeData.coords, effectivePosition);
+      return getRemainingDistance(routeData.coords, snapped) + haversineDistanceM(effectivePosition, snapped.snappedPoint);
+    }
+    return haversineDistanceM(effectivePosition || DEMO_FALLBACK_COORDS, destination);
+  }, [routeData, effectivePosition, destination]);
 
   useEffect(() => {
     let active = true;
+    if (!destination) {
+      setRouteData(null);
+      setRouteLoading(false);
+      setRouteError(false);
+      return;
+    }
+
+    const fromPos = position || DEMO_FALLBACK_COORDS;
+
     const getRoute = async () => {
-      if (!destination || !position) return;
       setRouteLoading(true);
       setRouteError(false);
       try {
-        const data = await fetchWalkingRoute(position, destination);
+        const data = await fetchWalkingRoute(fromPos, destination);
         if (active) {
           setRouteData(data);
           setSimulatedDist(0);
@@ -93,12 +115,11 @@ function MapsContent() {
         if (active) setRouteLoading(false);
       }
     };
-    
-    // Only refetch if destination changes significantly
+
     getRoute();
 
     return () => { active = false; };
-  }, [destination?.lat, destination?.lng]);
+  }, [destination?.lat, destination?.lng, destination?.name, position?.lat, position?.lng]);
 
   useEffect(() => {
     // Off route check
@@ -108,7 +129,7 @@ function MapsContent() {
         if (!routeOffPathTimer.current) {
           routeOffPathTimer.current = setTimeout(() => {
             // Reroute
-            fetchWalkingRoute(position, destination).then(data => setRouteData(data)).catch(() => {});
+            fetchWalkingRoute(position, destination).then(data => setRouteData(data)).catch(() => { });
             routeOffPathTimer.current = null;
           }, 5000);
         }
@@ -176,7 +197,7 @@ function MapsContent() {
           )}
         </div>
       </div>
-      
+
       {simulatedWalk && (
         <div className="absolute top-10 left-0 w-full z-50 pointer-events-none flex justify-center">
           <div className="bg-red-600 text-white text-xs px-2 py-0.5 font-bold tracking-widest rounded shadow-md animate-pulse">SIMULATED</div>
@@ -187,14 +208,14 @@ function MapsContent() {
       <div className="w-full h-[55%] relative">
         <CameraView onVideoReady={setVideoEl} />
         {arActive && (
-          <ArOverlay 
+          <ArOverlay
             active={arActive}
             accuracy={simulatedWalk ? 5 : accuracy}
             destination={destination}
             heading={heading}
             pitch={pitch}
             position={effectivePosition}
-            route={routeData?.coords || null}
+            route={routeData?.coords || (destination && effectivePosition ? [effectivePosition, destination] : null)}
           />
         )}
         <LandmarkScanner video={videoEl} arActive={arActive} />
@@ -205,14 +226,14 @@ function MapsContent() {
 
       {/* BOTTOM: MAP */}
       <div className="w-full h-[45%] relative">
-        <MapView 
-          position={effectivePosition} 
-          destination={destination} 
-          route={routeData?.coords.map(c => [c.lat, c.lng])} 
+        <MapView
+          position={effectivePosition}
+          destination={destination}
+          route={routeData?.coords.map(c => [c.lat, c.lng])}
           onMapClick={handleMapClick}
           heading={heading}
         />
-        <NavPanel 
+        <NavPanel
           destination={destination}
           routeData={routeData}
           routeLoading={routeLoading}
@@ -226,6 +247,7 @@ function MapsContent() {
           simulatedWalk={simulatedWalk}
           onToggleSimulate={() => setSimulatedWalk(!simulatedWalk)}
           onHoldWalk={setHoldingWalk}
+          position={effectivePosition}
         />
       </div>
     </main>
