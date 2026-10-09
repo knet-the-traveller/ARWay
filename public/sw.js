@@ -133,6 +133,10 @@ self.addEventListener("fetch", (event) => {
         const cachedMatch = await pagesCache.match(req, { ignoreSearch: true });
         if (cachedMatch) return cachedMatch;
 
+        // Fallback: cached "/maps"
+        const mapsMatch = await pagesCache.match("/maps", { ignoreSearch: true });
+        if (mapsMatch) return mapsMatch;
+
         // Fallback: root "/"
         const rootMatch = await pagesCache.match("/", { ignoreSearch: true });
         if (rootMatch) return rootMatch;
@@ -141,9 +145,11 @@ self.addEventListener("fetch", (event) => {
         const offlineMatch = await pagesCache.match("/offline.html");
         if (offlineMatch) return offlineMatch;
 
-        return new Response("You are offline. Open ARWay while online once.", {
-          status: 503,
-          headers: { "Content-Type": "text/plain" }
+        // Guaranteed inline 200 HTML recovery page (never 503 so Chrome never shows dinosaur)
+        const inlineHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ARWay - Offline</title><style>body{margin:0;padding:24px;background:#000;color:#fff;font-family:-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}h1{font-size:20px;margin-bottom:8px}p{font-size:14px;color:#888;margin-bottom:20px;max-width:280px}a{display:inline-block;padding:12px 24px;background:#3b82f6;color:#fff;border-radius:12px;text-decoration:none;font-weight:600}</style></head><body><h1>Offline Navigation</h1><p>This tab is not saved yet. Return to Maps or connect online to prepare offline assets.</p><a href="/maps">Return to Maps</a></body></html>`;
+        return new Response(inlineHtml, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" }
         });
       })()
     );
