@@ -167,3 +167,12 @@ export function remainingDistanceM(route: LatLng[], snapped: { index: number, sn
   }
   return dist;
 }
+
+export function lateralOffsetMeters(snappedPoint: LatLng, position: LatLng): { east: number, north: number, distanceM: number } {
+  const local = toLocalMeters(snappedPoint, position);
+  return {
+    east: local.east,
+    north: local.north,
+    distanceM: Math.sqrt(local.east * local.east + local.north * local.north)
+  };
+}

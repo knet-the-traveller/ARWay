@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { haversineDistanceM } from "@/lib/geo";
+import { sceneries } from "@/lib/sceneries";
+import { shops } from "@/lib/shops";
 
 export interface PlaceResult {
   id: string;
@@ -9,22 +11,40 @@ export interface PlaceResult {
   address: string;
   lat: number;
   lng: number;
+  tag?: string;
   distanceM?: number;
 }
 
 interface PlaceSearchProps {
   userLocation?: { lat: number; lng: number } | null;
-  onSelectPlace: (place: { lat: number; lng: number; name: string; address?: string }) => void;
+  userPosition?: { lat: number; lng: number } | null;
+  destinationName?: string | null;
+  onSelectPlace?: (place: { lat: number; lng: number; name: string; address?: string }) => void;
+  onSelect?: (place: { lat: number; lng: number; name: string; address?: string }) => void;
   className?: string;
 }
 
-export default function PlaceSearch({ userLocation, onSelectPlace, className = "" }: PlaceSearchProps) {
-  const [query, setQuery] = useState("");
+export default function PlaceSearch({
+  userLocation,
+  userPosition,
+  destinationName,
+  onSelectPlace,
+  onSelect,
+  className = ""
+}: PlaceSearchProps) {
+  const effectiveUserPos = userLocation || userPosition || null;
+  const [query, setQuery] = useState(destinationName || "");
   const [results, setResults] = useState<PlaceResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (destinationName) {
+      setQuery(destinationName);
+    }
+  }, [destinationName]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -46,23 +66,56 @@ export default function PlaceSearch({ userLocation, onSelectPlace, className = "
 
     setLoading(true);
 
+    // 1. Local search from sceneries and shops (instant & 100% offline ready)
+    const lower = text.toLowerCase();
+    const localMatches: PlaceResult[] = [];
+    for (const s of sceneries) {
+      if (s.name.toLowerCase().includes(lower) || s.address.toLowerCase().includes(lower)) {
+        const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat: s.lat, lng: s.lng }) : undefined;
+        localMatches.push({
+          id: `local-scenery-${s.id}`,
+          name: s.name,
+          address: s.address,
+          lat: s.lat,
+          lng: s.lng,
+          tag: "Heritage",
+          distanceM: dist
+        });
+      }
+    }
+    for (const sh of shops) {
+      if (sh.name.toLowerCase().includes(lower) || sh.address.toLowerCase().includes(lower)) {
+        const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat: sh.lat, lng: sh.lng }) : undefined;
+        localMatches.push({
+          id: `local-shop-${sh.id}`,
+          name: sh.name,
+          address: sh.address,
+          lat: sh.lat,
+          lng: sh.lng,
+          tag: "Shop",
+          distanceM: dist
+        });
+      }
+    }
+
     try {
-      // 1. Try Photon Geocoder (Fast OpenStreetMap Search by Komoot, 0 keys needed)
+      // 2. Photon Geocoder (Fast OpenStreetMap Search by Komoot, 0 keys needed)
       let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&limit=6`;
-      if (userLocation) {
-        url += `&lat=${userLocation.lat}&lon=${userLocation.lng}`;
+      if (effectiveUserPos) {
+        url += `&lat=${effectiveUserPos.lat}&lon=${effectiveUserPos.lng}`;
       }
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3500);
-
       const res = await fetch(url, { signal: controller.signal }).catch(() => null);
       clearTimeout(timeout);
+
+      const onlineMatches: PlaceResult[] = [];
 
       if (res && res.ok) {
         const data = await res.json();
         if (data && data.features && data.features.length > 0) {
-          const mapped: PlaceResult[] = data.features.map((f: any, idx: number) => {
+          data.features.forEach((f: any, idx: number) => {
             const props = f.properties || {};
             const coords = f.geometry?.coordinates || [0, 0];
             const lng = coords[0];
@@ -76,59 +129,38 @@ export default function PlaceSearch({ userLocation, onSelectPlace, className = "
             ].filter(Boolean);
 
             const address = addressParts.join(", ") || props.country || "Location";
-            const dist = userLocation ? haversineDistanceM(userLocation, { lat, lng }) : undefined;
+            const dist = effectiveUserPos ? haversineDistanceM(effectiveUserPos, { lat, lng }) : undefined;
 
-            return {
+            onlineMatches.push({
               id: `photon-${idx}-${lat}-${lng}`,
               name,
               address,
               lat,
               lng,
               distanceM: dist
-            };
+            });
           });
-
-          // Sort by distance if user location is available
-          if (userLocation) {
-            mapped.sort((a, b) => (a.distanceM || 0) - (b.distanceM || 0));
-          }
-
-          setResults(mapped);
-          setLoading(false);
-          setIsOpen(true);
-          return;
         }
       }
 
-      // 2. Fallback to OpenStreetMap Nominatim
-      const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&limit=5`;
-      const nomRes = await fetch(nomUrl).catch(() => null);
-      if (nomRes && nomRes.ok) {
-        const nomData = await nomRes.json();
-        if (Array.isArray(nomData) && nomData.length > 0) {
-          const mapped: PlaceResult[] = nomData.map((item: any, idx: number) => {
-            const lat = parseFloat(item.lat);
-            const lng = parseFloat(item.lon);
-            const dist = userLocation ? haversineDistanceM(userLocation, { lat, lng }) : undefined;
-            return {
-              id: `nom-${idx}-${lat}-${lng}`,
-              name: item.display_name.split(",")[0] || text,
-              address: item.display_name,
-              lat,
-              lng,
-              distanceM: dist
-            };
-          });
-          setResults(mapped);
-          setLoading(false);
-          setIsOpen(true);
-          return;
-        }
+      // Deduplicate and combine
+      const combined = [...localMatches];
+      for (const om of onlineMatches) {
+        const isDup = combined.some(c =>
+          Math.abs(c.lat - om.lat) < 0.0003 && Math.abs(c.lng - om.lng) < 0.0003
+        );
+        if (!isDup) combined.push(om);
       }
 
-      setResults([]);
-    } catch (e) {
-      setResults([]);
+      if (effectiveUserPos) {
+        combined.sort((a, b) => (a.distanceM || 0) - (b.distanceM || 0));
+      }
+
+      setResults(combined);
+      setIsOpen(true);
+    } catch {
+      setResults(localMatches);
+      setIsOpen(localMatches.length > 0);
     } finally {
       setLoading(false);
     }
@@ -156,12 +188,14 @@ export default function PlaceSearch({ userLocation, onSelectPlace, className = "
   const handleSelect = (place: PlaceResult) => {
     setQuery(place.name);
     setIsOpen(false);
-    onSelectPlace({
+    const payload = {
       lat: place.lat,
       lng: place.lng,
       name: place.name,
       address: place.address
-    });
+    };
+    onSelectPlace?.(payload);
+    onSelect?.(payload);
   };
 
   const handleQuickPreset = (preset: string) => {
@@ -211,7 +245,7 @@ export default function PlaceSearch({ userLocation, onSelectPlace, className = "
         )}
       </div>
 
-      {/* QUICK PRESET CHIPS (shown when input focused or empty) */}
+      {/* QUICK PRESET CHIPS */}
       {!query && (
         <div className="flex gap-1.5 mt-1.5 px-0.5 overflow-x-auto scrollbar-none">
           {["McDonald's", "Jollibee", "Coffee", "7-Eleven"].map((chip) => (
@@ -236,8 +270,15 @@ export default function PlaceSearch({ userLocation, onSelectPlace, className = "
               className="w-full text-left px-3.5 py-2.5 hover:bg-white/5 active:bg-blue-600/20 flex items-center justify-between gap-2 transition-colors group"
             >
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold text-white truncate group-hover:text-blue-400 transition-colors">
-                  {res.name}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-white truncate group-hover:text-blue-400 transition-colors">
+                    {res.name}
+                  </span>
+                  {res.tag && (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      {res.tag}
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-neutral-400 truncate mt-0.5">
                   {res.address}

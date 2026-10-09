@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RouteData } from "@/lib/route";
 import { haversineDistanceM } from "@/lib/geo";
 
@@ -15,22 +15,53 @@ interface NavPanelProps {
   onRecenter: () => void;
   onClear: () => void;
   remainingDistanceM: number;
-  simulatedWalk: boolean;
-  onToggleSimulate: () => void;
-  onHoldWalk: (held: boolean) => void;
-  position?: { lat: number; lng: number } | null;
+  realign?: boolean;
+  onToggleRealign?: () => void;
+  simulatedWalk?: boolean;
+  onToggleSimulate?: () => void;
+  onHoldWalk?: (held: boolean) => void;
+  compact?: boolean;
+  position?: { lat: number, lng: number } | null;
 }
 
 export default function NavPanel({ 
   destination, routeData, routeLoading, routeError, 
   arActive, onStartAr, onStopAr, onRecenter, onClear, 
-  remainingDistanceM, simulatedWalk, onToggleSimulate, onHoldWalk,
-  position
+  remainingDistanceM, realign = true, onToggleRealign, 
+  simulatedWalk = false, onToggleSimulate, onHoldWalk,
+  compact = false, position
 }: NavPanelProps) {
 
+  const [showHint, setShowHint] = useState(true);
+  const [hintOpacity, setHintOpacity] = useState(1);
+
+  useEffect(() => {
+    if (!destination) {
+      setShowHint(true);
+      setHintOpacity(1);
+      
+      const fadeTimer = setTimeout(() => {
+        setHintOpacity(0);
+      }, 4000);
+      
+      const hideTimer = setTimeout(() => {
+        setShowHint(false);
+      }, 4400);
+      
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(hideTimer);
+      };
+    }
+  }, [destination]);
+
   if (!destination) {
+    if (!showHint) return null;
     return (
-      <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/90 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl border border-white/10 z-20 pointer-events-auto">
+      <div 
+        className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/90 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl border border-white/10 z-20 pointer-events-auto transition-opacity duration-300"
+        style={{ opacity: hintOpacity }}
+      >
         <p className="text-[13px] text-neutral-300 text-center">Search a place above, tap the map to drop a pin, or pick a preset</p>
       </div>
     );
@@ -81,7 +112,7 @@ export default function NavPanel({
     : routeData?.source === "network" 
     ? "Live route" 
     : routeData?.source === "cache" 
-    ? "Offline street route" 
+    ? "Saved route (offline)" 
     : "Direct line";
 
   const sourceColor = routeLoading
@@ -91,6 +122,33 @@ export default function NavPanel({
     : routeData?.source === "cache" 
     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
     : "bg-gray-800 text-gray-300";
+
+  if (compact) {
+    return (
+      <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-2 max-h-[84px]">
+        <div className="flex justify-between items-center">
+          <h3 className="text-[15px] font-semibold truncate flex-1 min-w-0 pr-2">{destination.name}</h3>
+          <div className="flex items-center text-[12px] text-gray-300 flex-shrink-0 gap-1.5">
+            <span className="font-medium text-white">{distText}</span>
+            <span>&middot;</span>
+            <span>{etaMins} min</span>
+          </div>
+        </div>
+
+        <div className="flex gap-2 h-[44px]">
+          {arActive ? (
+            <button onClick={onStopAr} className="flex-1 bg-red-500 text-white font-semibold rounded-xl active:bg-red-600 transition-colors text-sm">Stop</button>
+          ) : (
+            <button onClick={onStartAr} className="flex-1 bg-blue-500 text-white font-semibold rounded-xl active:bg-blue-600 transition-colors text-sm">Start AR</button>
+          )}
+          {arActive && (
+            <button onClick={onRecenter} className="px-3 bg-gray-700 text-white font-semibold rounded-xl active:bg-gray-600 transition-colors text-xs">Recenter</button>
+          )}
+          <button onClick={onClear} className="px-3 bg-gray-800 text-gray-300 font-semibold rounded-xl active:bg-gray-700 transition-colors text-xs">Clear</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="absolute bottom-4 left-4 right-4 bg-[#1c1c1e]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl z-20 pointer-events-auto flex flex-col gap-3 max-h-[140px]">
@@ -110,11 +168,19 @@ export default function NavPanel({
         </div>
         
         <div className="flex flex-col gap-1 flex-shrink-0">
-          <label className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded">
-            <input type="checkbox" checked={simulatedWalk} onChange={onToggleSimulate} className="w-3 h-3 accent-blue-500" />
-            Demo mode
-          </label>
-          {simulatedWalk && (
+          {onToggleRealign && (
+            <label className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded cursor-pointer">
+              <input type="checkbox" checked={realign} onChange={onToggleRealign} className="w-3 h-3 accent-blue-500" />
+              Realign
+            </label>
+          )}
+          {onToggleSimulate && (
+            <label className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded cursor-pointer">
+              <input type="checkbox" checked={simulatedWalk} onChange={onToggleSimulate} className="w-3 h-3 accent-blue-500" />
+              Simulate
+            </label>
+          )}
+          {simulatedWalk && onHoldWalk && (
             <button 
               onPointerDown={() => onHoldWalk(true)} 
               onPointerUp={() => onHoldWalk(false)}

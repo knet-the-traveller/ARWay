@@ -281,7 +281,6 @@ export default function LandmarkScanner({ video, arActive }: LandmarkScannerProp
                   : "Offline Mode"}
             </span>
           </Link>
-
           {/* Privacy Badge */}
           {isScanning && (
             <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center shadow-sm">
