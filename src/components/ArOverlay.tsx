@@ -160,15 +160,28 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
           offsetEastRef.current *= 0.9;
         }
 
-        let path = (currentRoute && currentRoute.length > 1 && snapped)
-          ? sliceAhead(currentRoute, snapped, LOOKAHEAD_M)
-          : null;
+        let path: LatLng[] = [];
 
-        if (!path || path.length < 2) {
-          path = currentDest ? [currentPos, currentDest] : null;
+        if (currentRoute && currentRoute.length > 1 && snapped) {
+          path = sliceAhead(currentRoute, snapped, LOOKAHEAD_M);
         }
 
-        if (!path || path.length < 2) {
+        // Resilient fallback for dropped pins or straight-line routes:
+        // Automatically densify into 1-meter intervals along bearing
+        if (path.length < 2 && currentDest) {
+          const totalDist = haversineDistanceM(currentPos, currentDest);
+          const brng = bearingDeg(currentPos, currentDest);
+          const maxLook = Math.min(totalDist, LOOKAHEAD_M);
+          path = [currentPos];
+          for (let m = 1.0; m <= maxLook; m += 1.0) {
+            path.push(offsetLatLng(currentPos, brng, m));
+          }
+          if (path.length < 2) {
+            path.push(currentDest);
+          }
+        }
+
+        if (path.length < 2) {
           return;
         }
 
@@ -219,46 +232,47 @@ export default function ArOverlay({ route, position, accuracy, heading, pitch, a
         if (w === 0 || h === 0) return;
 
         const cx = w / 2;
-        const cy = h / 2;
+        const cy = h * 0.45; // Horizon at 45% of height gives ample ground space
         const effectiveZoom = zoomRef.current || 1;
         const f = ((w / 2) / Math.tan((CAMERA_HFOV_DEG * Math.PI / 180) / 2)) * effectiveZoom;
 
-        const pitchDeg = pitchRef.current;
-        const pitchRad = pitchDeg * Math.PI / 180;
+        const pitchDeg = pitchRef.current || 0;
+        // Clamp pitch to a stable visual horizon range:
+        // Protects against phone tilt pitching ground geometry into sky or below screen
+        const clampedPitchDeg = Math.max(-12, Math.min(22, pitchDeg));
+        const pitchRad = (clampedPitchDeg * Math.PI) / 180;
         const cosPitch = Math.cos(pitchRad);
         const sinPitch = Math.sin(pitchRad);
 
         const projectPoint = (d: number, relAngleDeg: number, yGround: number) => {
           let steeredRel = relAngleDeg;
           if (isSteering) {
-            const steerOffset = smoothedAngle > 0 ? -15 : 15;
-            steeredRel += steerOffset;
+            steeredRel = Math.max(-EDGE_CLAMP_DEG, Math.min(EDGE_CLAMP_DEG, steeredRel));
           }
-          steeredRel = Math.max(-EDGE_CLAMP_DEG, Math.min(EDGE_CLAMP_DEG, steeredRel));
 
-          const relRad = steeredRel * Math.PI / 180;
+          const relRad = (steeredRel * Math.PI) / 180;
           const x3d = d * Math.sin(relRad);
-          let z3d = d * Math.cos(relRad);
+          const z3d = Math.max(0.6, d * Math.cos(relRad));
           
-          if (z3d < NEAR_CLIP_M) z3d = NEAR_CLIP_M;
+          const y3d = yGround; // camera elevation (1.4m)
           
-          const y3d = yGround;
-          const yRot = y3d * cosPitch - z3d * sinPitch;
-          const zRot = y3d * sinPitch + z3d * cosPitch;
+          // Safe pitch rotation keeping ground ribbon firmly grounded
+          const yRot = Math.max(0.15, y3d * cosPitch - z3d * sinPitch);
+          const zRot = Math.max(0.6, y3d * sinPitch + z3d * cosPitch);
           
           return { x: x3d, y: yRot, z: zRot };
         };
 
-        const screenProject = (pt3d: { x: number, y: number, z: number }) => {
-          if (pt3d.z < 0.1) return null;
+        const screenProject = (pt3d: { x: number; y: number; z: number }) => {
+          if (pt3d.z < 0.2) return null;
           return {
-            sx: cx + f * pt3d.x / pt3d.z,
-            sy: cy + f * pt3d.y / pt3d.z
+            sx: cx + (f * pt3d.x) / pt3d.z,
+            sy: cy + (f * pt3d.y) / pt3d.z
           };
         };
 
         const time = performance.now() / 1000;
-        ctx.globalAlpha = isWeakGps ? 0.6 : 1.0;
+        ctx.globalAlpha = isWeakGps ? 0.85 : 1.0;
 
         // Collect ribbon quads
         for (let i = 0; i < path.length - 1; i++) {
