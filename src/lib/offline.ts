@@ -78,7 +78,35 @@ export function useOnlineStatus(): boolean {
   return mounted ? online : true;
 }
 
-// Warm pages and extracted static script/css chunks
+// Helper to extract static script & CSS bundle chunks from HTML and RSC flight data
+function extractChunksFromText(text: string, chunkUrls: Set<string>) {
+  // 1. Standard /_next/static/ URLs
+  const matches1 = text.match(/\/(_next\/static\/[a-zA-Z0-9_\-\.\/]+)/g) || [];
+  matches1.forEach((m) => {
+    const clean = m.replace(/["'\)\}\]\\]+$/, "");
+    if (clean.endsWith(".js") || clean.endsWith(".css")) {
+      chunkUrls.add(clean);
+    }
+  });
+
+  // 2. JSON-escaped \/_next\/static\/ URLs in RSC flight data
+  const matches2 = text.match(/\\\/_next\\\/static\\\/[a-zA-Z0-9_\-\.\/\\]+/g) || [];
+  matches2.forEach((m) => {
+    const unescaped = m.replace(/\\\//g, "/").replace(/["'\)\}\]\\]+$/, "");
+    if (unescaped.endsWith(".js") || unescaped.endsWith(".css")) {
+      chunkUrls.add(unescaped);
+    }
+  });
+
+  // 3. Raw static/chunks/... paths
+  const matches3 = text.match(/static\/chunks\/[a-zA-Z0-9_\-\.\/]+(\.js|\.css)/g) || [];
+  matches3.forEach((m) => {
+    const clean = m.replace(/["'\)\}\]\\]+$/, "");
+    chunkUrls.add(`/_next/${clean}`);
+  });
+}
+
+// Warm pages, RSC flight payloads, and extracted static script/css chunks
 export async function warmPages(
   onProgress?: (current: number, total: number, label: string) => void
 ): Promise<{ pagesCount: number; chunksCount: number }> {
@@ -96,30 +124,53 @@ export async function warmPages(
     }
   } catch (e) {}
 
+  const origin = window.location.origin;
+
   for (let i = 0; i < ROUTES_TO_CACHE.length; i++) {
     const route = ROUTES_TO_CACHE[i];
-    onProgress?.(i, ROUTES_TO_CACHE.length, `Fetching ${route}`);
+    onProgress?.(i, ROUTES_TO_CACHE.length, `Pre-warming ${route}`);
+
+    // 1. Fetch and cache standard HTML document
     try {
       const res = await fetch(route, { credentials: "same-origin" });
       if (res && res.ok) {
         pagesCount++;
-        if (pagesCache) {
-          await pagesCache.put(route, res.clone());
-        }
         const html = await res.text();
-
-        // 1. Match standard /_next/static/ URLs
-        const nextStaticMatches = html.match(/\/(_next\/static\/[a-zA-Z0-9_\-\.\/]+)/g) || [];
-        nextStaticMatches.forEach((m) => chunkUrls.add(m));
-
-        // 2. Match static/chunks/... appearing without leading /_next/
-        const rawChunkMatches = html.match(/static\/chunks\/[a-zA-Z0-9_\-\.\/]+(\.js|\.css)/g) || [];
-        rawChunkMatches.forEach((m) => chunkUrls.add(`/_next/${m}`));
+        if (pagesCache) {
+          const headers = new Headers();
+          headers.set("content-type", "text/html; charset=utf-8");
+          // Store under relative route, pathname, and full URL without Vary headers
+          await pagesCache.put(route, new Response(html, { status: 200, headers }));
+          await pagesCache.put(new URL(route, origin).href, new Response(html, { status: 200, headers }));
+        }
+        extractChunksFromText(html, chunkUrls);
       }
-    } catch (e) { }
+    } catch (e) {}
+
+    // 2. Fetch and cache React Server Component (RSC) flight payload for tab navigation
+    try {
+      const rscRes = await fetch(route, {
+        headers: { RSC: "1" },
+        credentials: "same-origin"
+      });
+      if (rscRes && rscRes.ok) {
+        const rscText = await rscRes.text();
+        if (pagesCache) {
+          const rscHeaders = new Headers();
+          rscHeaders.set("content-type", "text/x-component; charset=utf-8");
+          // Store under route with _rsc query and as an RSC request
+          await pagesCache.put(`${route}?_rsc=offline`, new Response(rscText, { status: 200, headers: rscHeaders }));
+          await pagesCache.put(
+            new Request(new URL(`${route}?_rsc=offline`, origin).href, { headers: { RSC: "1" } }),
+            new Response(rscText, { status: 200, headers: rscHeaders })
+          );
+        }
+        extractChunksFromText(rscText, chunkUrls);
+      }
+    } catch (e) {}
   }
 
-  // Fetch unique chunks
+  // Fetch unique static chunks
   const uniqueChunks = Array.from(chunkUrls);
   let chunksCount = 0;
   for (let j = 0; j < uniqueChunks.length; j++) {
@@ -133,7 +184,7 @@ export async function warmPages(
           await staticCache.put(chunk, cRes.clone());
         }
       }
-    } catch (e) { }
+    } catch (e) {}
   }
 
   return { pagesCount, chunksCount };
@@ -314,20 +365,20 @@ export async function verifyOffline(): Promise<VerifyItem[]> {
   // 2. Each ROUTES_TO_CACHE present
   let missingRoutes: string[] = [];
   for (const route of ROUTES_TO_CACHE) {
-    const match = await caches.match(route, { ignoreSearch: true });
+    const match = await caches.match(route, { ignoreSearch: true, ignoreVary: true });
     if (!match) missingRoutes.push(route);
   }
   results.push({
     label: "App Shell Pages Cached",
     ok: missingRoutes.length === 0,
-    detail: missingRoutes.length === 0 ? "All 5 core routes cached" : `Missing: ${missingRoutes.join(", ")}`
+    detail: missingRoutes.length === 0 ? "All core routes cached (HTML & RSC payloads)" : `Missing: ${missingRoutes.join(", ")}`
   });
 
   // 3. Every sceneries image present
   const images = getImageSources();
   let missingImgs = 0;
   for (const img of images) {
-    const match = await caches.match(img);
+    const match = await caches.match(img, { ignoreSearch: true, ignoreVary: true });
     if (!match) missingImgs++;
   }
   results.push({

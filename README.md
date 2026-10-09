@@ -27,7 +27,7 @@ Built for AppBuildersPH Hackathon 2026 · Local AI
 
 - **GitHub repository:** https://github.com/knet-the-traveller/ARWay
 - **Live demo (optional):** https://ar-way.vercel.app
-- **Hardware tested on:** Android phone, Android 10, Chrome 154 (mobile), 8 CPU cores, 8 GB RAM, WebGPU available. Phone model: POCO X8 Pro. Laptop used for development and the demo: ASUS V16. Not yet tested on iPhone/Safari. The UI is laid out for a 375x667 viewport.
+- **Hardware tested on:** Android phone, Android 10, Chrome 154 (mobile), 8 CPU cores, 8 GB RAM, WebGPU available. Phone model: POCO X8 Pro. SAMSUNG A54 5G. Laptop used for development and the demo: ASUS V16. Not yet tested on iPhone/Safari. The UI is laid out for a 375x667 viewport.
 
 ## What it does
 - Camera on top and map on the bottom; resizable camera/map split screen

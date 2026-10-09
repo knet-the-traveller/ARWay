@@ -67,7 +67,7 @@ export function getImageSources(): string[] {
         const posts = JSON.parse(data);
         if (Array.isArray(posts)) {
           for (const post of posts) {
-            if (post.image && (post.image.startsWith("/sceneries/") || post.image.startsWith("/shops/"))) {
+            if (post.image && (post.image.startsWith("/sceneries/") || post.image.startsWith("/shop/") || post.image.startsWith("/shops/"))) {
               images.add(post.image);
             }
           }
