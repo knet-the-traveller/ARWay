@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export default function CameraView() {
+interface CameraViewProps {
+  onVideoReady?: (video: HTMLVideoElement | null) => void;
+}
+
+export default function CameraView({ onVideoReady }: CameraViewProps = {}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,8 +33,17 @@ export default function CameraView() {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
+      if (onVideoReady) {
+        onVideoReady(null);
+      }
     };
-  }, []);
+  }, [onVideoReady]);
+
+  const handlePlay = () => {
+    if (onVideoReady && videoRef.current) {
+      onVideoReady(videoRef.current);
+    }
+  };
 
   return (
     <div className="relative w-full h-full bg-black">
@@ -44,6 +57,7 @@ export default function CameraView() {
           autoPlay
           playsInline
           muted
+          onPlay={handlePlay}
           className="w-full h-full object-cover"
         />
       )}

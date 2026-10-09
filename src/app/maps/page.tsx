@@ -4,7 +4,8 @@ import dynamic from "next/dynamic";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import CameraView from "@/components/CameraView";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
+import LandmarkScanner from "@/components/LandmarkScanner";
 
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
@@ -13,6 +14,7 @@ const MapView = dynamic(() => import("@/components/MapView"), {
 function MapsContent() {
   const { position, accuracy, error } = useGeolocation();
   const searchParams = useSearchParams();
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
 
   const destination = useMemo(() => {
     const lat = searchParams.get("lat");
@@ -41,7 +43,8 @@ function MapsContent() {
 
       {/* TOP: CAMERA */}
       <div className="w-full h-[55%] relative">
-        <CameraView />
+        <CameraView onVideoReady={setVideoEl} />
+        <LandmarkScanner video={videoEl} />
       </div>
 
       {/* DIVIDER */}

@@ -9,7 +9,7 @@ export interface Scenery {
 
 export const sceneries: Scenery[] = [
   { id: "rizal-park", name: "Rizal Park (Luneta)", address: "Ermita, Manila", lat: 14.5826, lng: 120.9787, image: "/sceneries/Luneta.jpg" },
-  { id: "manila-baywalk", name: "Manila Baywalk (Bay sunset)", address: "Roxas Blvd, Malate, Manila", lat: 14.5730, lng: 120.9772 },
+  { id: "manila-baywalk", name: "Manila Baywalk (Bay sunset)", address: "Roxas Blvd, Malate, Manila", lat: 14.5730, lng: 120.9772, image: "/sceneries/Manila-Baywalk.jpg" },
   { id: "intramuros", name: "Intramuros", address: "Manila", lat: 14.5896, lng: 120.9747, image: "/sceneries/Intramuros.jpg" },
   { id: "fort-santiago", name: "Fort Santiago", address: "Intramuros, Manila", lat: 14.5951, lng: 120.9660, image: "/sceneries/Fort-Santiago-Intramuros.avif" },
   { id: "manila-cathedral", name: "Manila Cathedral", address: "Intramuros, Manila", lat: 14.5911, lng: 120.9728, image: "/sceneries/Manila-Cathedral.jpg" },
