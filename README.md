@@ -56,7 +56,7 @@ flowchart TD
 The embeddings for reference places (sceneries) are generated using crops and flips (5 variations per image) and cached in IndexedDB. The thresholds used in the app are 0.64 for the minimum score and 0.03 for the minimum margin over the runner-up, requiring 3 consecutive confirming frames to validate a match.
 
 ## The proof
-- **Demo video (about 1 minute):** **[TO BE ADDED]**
+- **Demo video (about 1 minute):** https://www.youtube.com/watch?v=50yBWZ7lvY8
 - **X / LinkedIn video post:** https://lnkd.in/p/guqHBtbY
 - **Screenshots:** 
 
