@@ -153,7 +153,7 @@ self.addEventListener("fetch", (event) => {
             if (networkRes && networkRes.ok && isHtmlResponse(networkRes)) {
               return networkRes;
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         // Offline or timed out: ONLY match validated HTML documents
@@ -238,7 +238,7 @@ self.addEventListener("fetch", (event) => {
 
             const networkRes = await Promise.race([fetchPromise, timeoutPromise]);
             if (networkRes && networkRes.ok) return networkRes;
-          } catch (e) {}
+          } catch (e) { }
         }
 
         // 1. Try exact request in rscCache
@@ -314,7 +314,7 @@ self.addEventListener("fetch", (event) => {
             }
             return res;
           }
-        } catch (e) {}
+        } catch (e) { }
 
         return new Response(null, { status: 204 });
       })()
