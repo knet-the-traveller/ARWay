@@ -57,7 +57,7 @@ The embeddings for reference places (sceneries) are generated using crops and fl
 
 ## The proof
 - **Demo video (about 1 minute):** **[TO BE ADDED]**
-- **X / LinkedIn video post:** **[TO BE ADDED]**
+- **X / LinkedIn video post:** https://lnkd.in/p/guqHBtbY
 - **Screenshots:** 
 
 | Home Feed | AR Navigation View | Landmark Recognition Result | Offline Setup Page |
